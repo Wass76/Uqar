@@ -3,18 +3,18 @@ version: '3.8'
 
 # Database service
 services:
-  teryaq-db:
+  uqar-db:
     image: postgres:latest
-    container_name: teryaq-db
+    container_name: uqar-db
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: teryaq
+      POSTGRES_DB: uqar
       PGDATA: /var/lib/postgresql/data # Internal path where Postgres stores data
     ports:
       - "15432:5432" # Maps container port 5432 to host port 15432 (optional for direct access)
     networks:
-      - teryaq-net
+      - uqar-net
     restart: unless-stopped
     # Resource limits to prevent CPU thrashing and memory issues
     deploy:
@@ -27,7 +27,7 @@ services:
           memory: 256M
     volumes:
       # Named Volume for Persistent Database Data (CRUCIAL FOR DATA PERSISTENCE & RESTORATION)
-      - teryaq_pg_data:/var/lib/postgresql/data # Maps internal PGDATA to a named Docker volume
+      - uqar_pg_data:/var/lib/postgresql/data # Maps internal PGDATA to a named Docker volume
     healthcheck: # IMPORTANT: This ensures the DB is truly ready before apps connect
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
@@ -36,28 +36,28 @@ services:
       start_period: 10s # Give the DB some initial time to come up
 
   # application service
-  teryaq-app:
+  uqar-app:
     build: . # Builds the Docker image from the Dockerfile in the current directory
-    image: teryaq-app # Name for your built Docker image
+    image: uqar-app # Name for your built Docker image
     depends_on:
-      # teryaq-app will start ONLY AFTER teryaq-db is healthy
-      teryaq-db:
+      # uqar-app will start ONLY AFTER uqar-db is healthy
+      uqar-db:
         condition: service_healthy
-    container_name: teryaq-backend
+    container_name: uqar-backend
     ports:
       - "13000:3000" # Maps container port 3000 to host port 13000
     environment:
-      # Database connection details, using the Docker Compose service name 'teryaq-db' as the hostname
-      SPRING_DATASOURCE_URL: jdbc:postgresql://teryaq-db:5432/teryaq
+      # Database connection details, using the Docker Compose service name 'uqar-db' as the hostname
+      SPRING_DATASOURCE_URL: jdbc:postgresql://uqar-db:5432/uqar
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: password
-      SPRING_DATASOURCE_DATABASE: teryaq
+      SPRING_DATASOURCE_DATABASE: uqar
       # Disable Flyway to prevent migration issues
       SPRING_FLYWAY_ENABLED: "false"
       # JVM memory settings to prevent memory leaks
       JAVA_OPTS: "-Xmx768m -Xms256m"
     networks:
-      - teryaq-net # Connects to the shared network
+      - uqar-net # Connects to the shared network
     restart: unless-stopped
     # Resource limits to prevent CPU thrashing and memory issues
     deploy:
@@ -70,9 +70,9 @@ services:
           memory: 512M
 
 networks:
-  teryaq-net:
+  uqar-net:
     driver: bridge
 
 # Define the named volume for data persistence
 volumes:
-  teryaq_pg_data: # This is the named volume that Docker manages on your host
+  uqar_pg_data: # This is the named volume that Docker manages on your host
