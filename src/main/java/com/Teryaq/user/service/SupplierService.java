@@ -10,7 +10,6 @@ import com.Teryaq.user.entity.Pharmacy;
 import com.Teryaq.user.mapper.SupplierMapper;
 import com.Teryaq.user.repository.SupplierRepository;
 import com.Teryaq.user.repository.UserRepository;
-import com.Teryaq.user.service.BaseSecurityService;
 import com.Teryaq.utils.exception.ResourceNotFoundException;
 import com.Teryaq.utils.exception.ConflictException;
 import com.Teryaq.utils.exception.UnAuthorizedException;

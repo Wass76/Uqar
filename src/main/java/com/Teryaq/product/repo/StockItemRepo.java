@@ -31,7 +31,7 @@ public interface StockItemRepo extends JpaRepository<StockItem, Long> {
     @Query("SELECT s FROM StockItem s WHERE s.expiryDate < :date AND s.pharmacy.id = :pharmacyId AND s.quantity > 0")
     List<StockItem> findExpiredItems(@Param("date") LocalDate date, @Param("pharmacyId") Long pharmacyId);
     
-    @Query("SELECT s FROM StockItem s WHERE s.expiryDate BETWEEN :startDate AND :endDate AND s.pharmacy.id = :pharmacyId AND s.quantity > 0")
+    @Query("SELECT s FROM StockItem s WHERE s.expiryDate > :startDate AND s.expiryDate <= :endDate AND s.pharmacy.id = :pharmacyId AND s.quantity > 0")
     List<StockItem> findItemsExpiringSoon(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate, @Param("pharmacyId") Long pharmacyId);
     
     @Query("SELECT s FROM StockItem s WHERE s.productId = :productId AND s.pharmacy.id = :pharmacyId AND s.quantity > :minQuantity AND s.expiryDate > :date ORDER BY s.dateAdded ASC")

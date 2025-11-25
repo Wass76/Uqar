@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -15,6 +16,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.Teryaq.moneybox.service.SalesIntegrationService;
+import com.Teryaq.notification.dto.NotificationRequest;
+import com.Teryaq.notification.enums.NotificationType;
+import com.Teryaq.notification.service.NotificationService;
 import com.Teryaq.product.Enum.PaymentType;
 import com.Teryaq.product.entity.StockItem;
 import com.Teryaq.product.mapper.StockItemMapper;
@@ -40,12 +44,15 @@ import com.Teryaq.sale.repo.SaleInvoiceRepository;
 import com.Teryaq.sale.repo.SaleRefundItemRepo;
 import com.Teryaq.sale.repo.SaleRefundRepo;
 import com.Teryaq.user.Enum.Currency;
+import com.Teryaq.user.config.RoleConstants;
 import com.Teryaq.user.entity.Customer;
 import com.Teryaq.user.entity.CustomerDebt;
+import com.Teryaq.user.entity.Employee;
 import com.Teryaq.user.entity.Pharmacy;
 import com.Teryaq.user.mapper.CustomerDebtMapper;
 import com.Teryaq.user.repository.CustomerDebtRepository;
 import com.Teryaq.user.repository.CustomerRepo;
+import com.Teryaq.user.repository.EmployeeRepository;
 import com.Teryaq.user.repository.UserRepository;
 import com.Teryaq.user.service.BaseSecurityService;
 import com.Teryaq.utils.exception.ConflictException;
@@ -91,6 +98,10 @@ public class SaleService extends BaseSecurityService {
     private SaleRefundItemRepo saleRefundItemRepo;
     @Autowired
     private SaleRefundMapper saleRefundMapper;
+    @Autowired
+    private NotificationService notificationService;
+    @Autowired
+    private EmployeeRepository employeeRepository;
 
         public SaleService(SaleInvoiceRepository saleInvoiceRepository,
                        SaleInvoiceItemRepository saleInvoiceItemRepository,
@@ -100,6 +111,8 @@ public class SaleService extends BaseSecurityService {
                        DiscountCalculationService discountCalculationService,
                        PaymentValidationService paymentValidationService,
                        CustomerDebtRepository customerDebtRepository,
+                       NotificationService notificationService,
+                       EmployeeRepository employeeRepository,
                        SaleMapper saleMapper,
                        StockItemMapper stockItemMapper,
                        SalesIntegrationService salesIntegrationService,
@@ -118,6 +131,8 @@ public class SaleService extends BaseSecurityService {
         this.stockItemMapper = stockItemMapper;
         this.salesIntegrationService = salesIntegrationService;
         this.customerDebtMapper = customerDebtMapper;
+        this.notificationService = notificationService;
+        this.employeeRepository = employeeRepository;
     }
 
     @Transactional
@@ -744,11 +759,22 @@ public class SaleService extends BaseSecurityService {
         
         // الحالة 2: فاتورة دين مدفوعة جزئياً
         else if (saleInvoice.getPaymentType() == PaymentType.CREDIT && paidAmount > 0) {
-            // حساب المبلغ المرتجع للعميل
-            float refundToCustomer = Math.min(totalRefundAmount, paidAmount);
-            float remainingRefund = totalRefundAmount - refundToCustomer;
+            // أولاً: خصم قيمة المرتجع من الدين الحالي
+            float debtBalance = Math.max(0, remainingAmount);
+            float debtReduction = Math.min(totalRefundAmount, debtBalance);
+            if (debtReduction > 0) {
+                try {
+                    reduceCustomerDebt(saleInvoice.getCustomer(), debtReduction, saleId);
+                    logger.info("Customer debt reduced by {} for refund invoice: {}", debtReduction, saleId);
+                } catch (Exception e) {
+                    logger.warn("Failed to reduce customer debt for refund invoice {}: {}", 
+                               saleId, e.getMessage());
+                }
+            }
             
-            // إرجاع النقد المدفوع للصندوق
+            // ثانياً: إرجاع أي مبلغ زائد تم دفعه نقداً
+            float refundableAmount = totalRefundAmount - debtReduction;
+            float refundToCustomer = Math.min(refundableAmount, paidAmount);
             if (refundToCustomer > 0) {
                 try {
                     salesIntegrationService.recordSaleRefund(
@@ -757,20 +783,9 @@ public class SaleService extends BaseSecurityService {
                         java.math.BigDecimal.valueOf(refundToCustomer),
                         saleInvoice.getCurrency()
                     );
-                    logger.info("Partial cash refund recorded in Money Box for credit invoice: {}", saleId);
+                    logger.info("Cash refund recorded in Money Box for credit invoice: {} - Amount: {}", saleId, refundToCustomer);
                 } catch (Exception e) {
-                    logger.warn("Failed to record partial cash refund in Money Box for invoice {}: {}", 
-                               saleId, e.getMessage());
-                }
-            }
-            
-            // خصم من دين العميل
-            if (remainingRefund > 0) {
-                try {
-                    reduceCustomerDebt(saleInvoice.getCustomer(), remainingRefund, saleId);
-                    logger.info("Customer debt reduced by {} for refund invoice: {}", remainingRefund, saleId);
-                } catch (Exception e) {
-                    logger.warn("Failed to reduce customer debt for refund invoice {}: {}", 
+                    logger.warn("Failed to record cash refund in Money Box for invoice {}: {}", 
                                saleId, e.getMessage());
                 }
             }
@@ -837,6 +852,7 @@ public class SaleService extends BaseSecurityService {
         if (newRemaining == 0) {
             debt.setStatus("PAID");
             debt.setPaidAt(LocalDate.now());
+            notifyDebtPaidFromRefund(debt, saleId);
         }
         
         customerDebtRepository.save(debt);
@@ -871,6 +887,54 @@ public class SaleService extends BaseSecurityService {
             logger.error("Error retrieving refund details for refundId {}: {}", refundId, e.getMessage(), e);
             throw new RuntimeException("Failed to retrieve refund details: " + e.getMessage(), e);
         }
+    }
+
+    private void notifyDebtPaidFromRefund(CustomerDebt debt, Long saleId) {
+        if (debt == null || debt.getCustomer() == null || debt.getCustomer().getPharmacy() == null) {
+            return;
+        }
+
+        Long pharmacyId = debt.getCustomer().getPharmacy().getId();
+        List<Long> recipients = getEligiblePharmacyStaff(pharmacyId);
+        if (recipients.isEmpty()) {
+            logger.debug("No eligible staff found for pharmacy {} to notify debt payment from refund {}", pharmacyId, debt.getId());
+            return;
+        }
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("debtId", debt.getId());
+        data.put("customerId", debt.getCustomer().getId());
+        data.put("customerName", debt.getCustomer().getName());
+        data.put("source", "REFUND");
+        data.put("saleId", saleId);
+
+        String body = String.format("تم إغلاق دين العميل %s بعد معالجة مرتجع.", debt.getCustomer().getName());
+
+        for (Long userId : recipients) {
+            try {
+                NotificationRequest request = new NotificationRequest();
+                request.setUserId(userId);
+                request.setTitle("تم سداد دين عبر مرتجع");
+                request.setBody(body);
+                request.setNotificationType(NotificationType.DEBT_PAID);
+                request.setData(new HashMap<>(data));
+                notificationService.sendNotification(request);
+            } catch (Exception e) {
+                logger.warn("Failed to send debt paid notification from refund for user {}: {}", userId, e.getMessage());
+                // Don't fail the refund transaction if notification fails
+            }
+        }
+    }
+
+    private List<Long> getEligiblePharmacyStaff(Long pharmacyId) {
+        return employeeRepository.findByPharmacy_Id(pharmacyId).stream()
+            .filter(employee -> employee.getRole() != null)
+            .filter(employee -> {
+                String roleName = employee.getRole().getName();
+                return RoleConstants.PHARMACY_MANAGER.equals(roleName) || RoleConstants.PHARMACY_EMPLOYEE.equals(roleName);
+            })
+            .map(Employee::getId)
+            .collect(Collectors.toList());
     }
     
 

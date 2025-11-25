@@ -33,6 +33,10 @@ public abstract class BaseSecurityService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
 
+    public Long getCurrentUserId() {
+        return getCurrentUser().getId();
+    }
+
     /**
      * Checks if the current user is a platform admin
      * @return true if the user is a platform admin

@@ -1,24 +1,14 @@
 package com.Teryaq.user.service;
 
-import com.Teryaq.user.dto.CustomerDebtDTORequest;
-import com.Teryaq.user.dto.CustomerDebtDTOResponse;
-import com.Teryaq.user.dto.PayCustomerDebtsRequest;
-import com.Teryaq.user.dto.PayCustomerDebtsResponse;
-import com.Teryaq.user.dto.PayDebtDTORequest;
-import com.Teryaq.user.entity.Customer;
-import com.Teryaq.user.entity.CustomerDebt;
-import com.Teryaq.user.mapper.CustomerDebtMapper;
-import com.Teryaq.user.repository.CustomerDebtRepository;
-import com.Teryaq.user.repository.CustomerRepo;
-import com.Teryaq.user.repository.UserRepository;
-import com.Teryaq.utils.exception.ResourceNotFoundException;
-import com.Teryaq.utils.exception.ConflictException;
-import com.Teryaq.product.Enum.PaymentMethod;
-import com.Teryaq.sale.entity.SaleInvoice;
-import com.Teryaq.sale.repo.SaleInvoiceRepository;
-import com.Teryaq.moneybox.service.SalesIntegrationService;
-import com.Teryaq.utils.exception.UnAuthorizedException;
-    
+import static com.Teryaq.user.Enum.Currency.SYP;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,13 +16,30 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
-
-import static com.Teryaq.user.Enum.Currency.SYP;
+import com.Teryaq.moneybox.service.SalesIntegrationService;
+import com.Teryaq.notification.dto.NotificationRequest;
+import com.Teryaq.notification.enums.NotificationType;
+import com.Teryaq.notification.service.NotificationService;
+import com.Teryaq.product.Enum.PaymentMethod;
+import com.Teryaq.sale.entity.SaleInvoice;
+import com.Teryaq.sale.repo.SaleInvoiceRepository;
+import com.Teryaq.user.config.RoleConstants;
+import com.Teryaq.user.dto.CustomerDebtDTORequest;
+import com.Teryaq.user.dto.CustomerDebtDTOResponse;
+import com.Teryaq.user.dto.PayCustomerDebtsRequest;
+import com.Teryaq.user.dto.PayCustomerDebtsResponse;
+import com.Teryaq.user.dto.PayDebtDTORequest;
+import com.Teryaq.user.entity.Customer;
+import com.Teryaq.user.entity.CustomerDebt;
+import com.Teryaq.user.entity.Employee;
+import com.Teryaq.user.mapper.CustomerDebtMapper;
+import com.Teryaq.user.repository.CustomerDebtRepository;
+import com.Teryaq.user.repository.CustomerRepo;
+import com.Teryaq.user.repository.EmployeeRepository;
+import com.Teryaq.user.repository.UserRepository;
+import com.Teryaq.utils.exception.ConflictException;
+import com.Teryaq.utils.exception.ResourceNotFoundException;
+import com.Teryaq.utils.exception.UnAuthorizedException;
 
 @Service
 public class CustomerDebtService extends BaseSecurityService {
@@ -44,11 +51,15 @@ public class CustomerDebtService extends BaseSecurityService {
     private final CustomerDebtMapper customerDebtMapper;
     private final SalesIntegrationService salesIntegrationService;
     private final SaleInvoiceRepository saleInvoiceRepository;
+    private final NotificationService notificationService;
+    private final EmployeeRepository employeeRepository;
     public CustomerDebtService(CustomerDebtRepository customerDebtRepository,
                        CustomerRepo customerRepo,
                        CustomerDebtMapper customerDebtMapper,
                        SalesIntegrationService salesIntegrationService,
                        SaleInvoiceRepository saleInvoiceRepository,
+                       NotificationService notificationService,
+                       EmployeeRepository employeeRepository,
                        UserRepository userRepository) {
         super(userRepository);
         this.customerDebtRepository = customerDebtRepository;
@@ -56,6 +67,8 @@ public class CustomerDebtService extends BaseSecurityService {
         this.customerDebtMapper = customerDebtMapper;
         this.salesIntegrationService = salesIntegrationService;
         this.saleInvoiceRepository = saleInvoiceRepository;
+        this.notificationService = notificationService;
+        this.employeeRepository = employeeRepository;
     }
 
     @Transactional
@@ -204,6 +217,8 @@ public class CustomerDebtService extends BaseSecurityService {
             }
         }
         
+        notifyDebtPayment(savedDebt, paymentAmount);
+
         return customerDebtMapper.toResponse(savedDebt);
     }
 
@@ -438,6 +453,9 @@ public class CustomerDebtService extends BaseSecurityService {
             }
             
             customerDebtRepository.save(debt);
+            if (amountToPay > 0) {
+                notifyDebtPayment(debt, amountToPay);
+            }
             
             PayCustomerDebtsResponse.DebtPaymentDetail detail = PayCustomerDebtsResponse.DebtPaymentDetail.builder()
                     .debtId(debt.getId())
@@ -486,7 +504,59 @@ public class CustomerDebtService extends BaseSecurityService {
                 .build();
     }
     
-    
+    private void notifyDebtPayment(CustomerDebt debt, float paymentAmount) {
+        if (paymentAmount <= 0 || debt == null || debt.getCustomer() == null) {
+            return;
+        }
+
+        Long pharmacyId = debt.getCustomer().getPharmacy().getId();
+        List<Long> recipients = getEligiblePharmacyStaff(pharmacyId);
+        if (recipients.isEmpty()) {
+            logger.debug("No eligible staff found for pharmacy {} to notify about debt payment {}", pharmacyId, debt.getId());
+            return;
+        }
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("debtId", debt.getId());
+        data.put("customerId", debt.getCustomer().getId());
+        data.put("customerName", debt.getCustomer().getName());
+        data.put("paymentAmount", paymentAmount);
+        data.put("remainingAmount", debt.getRemainingAmount());
+        data.put("status", debt.getStatus());
+
+        String title = "تم تسجيل دفعة دين";
+        String body = String.format("العميل %s سدّد %.2f من دينه. المتبقي %.2f.",
+                debt.getCustomer().getName(),
+                paymentAmount,
+                Math.max(debt.getRemainingAmount(), 0f));
+
+        for (Long userId : recipients) {
+            try {
+                NotificationRequest request = new NotificationRequest();
+                request.setUserId(userId);
+                request.setTitle(title);
+                request.setBody(body);
+                request.setNotificationType(NotificationType.DEBT_PAID);
+                request.setData(new HashMap<>(data));
+                notificationService.sendNotification(request);
+            } catch (Exception e) {
+                logger.warn("Failed to send debt payment notification for user {}: {}", userId, e.getMessage());
+                // Don't fail the payment transaction if notification fails
+            }
+        }
+    }
+
+    private List<Long> getEligiblePharmacyStaff(Long pharmacyId) {
+        return employeeRepository.findByPharmacy_Id(pharmacyId).stream()
+            .filter(employee -> employee.getRole() != null)
+            .filter(employee -> {
+                String roleName = employee.getRole().getName();
+                return RoleConstants.PHARMACY_MANAGER.equals(roleName) || RoleConstants.PHARMACY_EMPLOYEE.equals(roleName);
+            })
+            .map(Employee::getId)
+            .collect(Collectors.toList());
+    }
+
     @lombok.Data
     @lombok.Builder
     public static class DebtStatistics {

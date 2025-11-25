@@ -32,3 +32,10 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Firebase Service Account Keys ###
+# Ignore all Firebase service account JSON files (contains sensitive credentials)
+**/firebase/*.json
+src/main/resources/firebase/*.json
+# Optional: If you rename your file to serviceAccountKey.json, it will also be ignored
+**/serviceAccountKey.json
