@@ -5,7 +5,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -17,9 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.Teryaq.moneybox.service.SalesIntegrationService;
-import com.Teryaq.notification.dto.NotificationRequest;
-import com.Teryaq.notification.enums.NotificationType;
-import com.Teryaq.notification.service.NotificationService;
 import com.Teryaq.notification.dto.NotificationRequest;
 import com.Teryaq.notification.enums.NotificationType;
 import com.Teryaq.notification.service.NotificationService;
@@ -49,16 +45,13 @@ import com.Teryaq.sale.repo.SaleRefundItemRepo;
 import com.Teryaq.sale.repo.SaleRefundRepo;
 import com.Teryaq.user.Enum.Currency;
 import com.Teryaq.user.config.RoleConstants;
-import com.Teryaq.user.config.RoleConstants;
 import com.Teryaq.user.entity.Customer;
 import com.Teryaq.user.entity.CustomerDebt;
-import com.Teryaq.user.entity.Employee;
 import com.Teryaq.user.entity.Employee;
 import com.Teryaq.user.entity.Pharmacy;
 import com.Teryaq.user.mapper.CustomerDebtMapper;
 import com.Teryaq.user.repository.CustomerDebtRepository;
 import com.Teryaq.user.repository.CustomerRepo;
-import com.Teryaq.user.repository.EmployeeRepository;
 import com.Teryaq.user.repository.EmployeeRepository;
 import com.Teryaq.user.repository.UserRepository;
 import com.Teryaq.user.service.BaseSecurityService;
@@ -109,10 +102,6 @@ public class SaleService extends BaseSecurityService {
     private NotificationService notificationService;
     @Autowired
     private EmployeeRepository employeeRepository;
-    @Autowired
-    private NotificationService notificationService;
-    @Autowired
-    private EmployeeRepository employeeRepository;
 
         public SaleService(SaleInvoiceRepository saleInvoiceRepository,
                        SaleInvoiceItemRepository saleInvoiceItemRepository,
@@ -122,8 +111,6 @@ public class SaleService extends BaseSecurityService {
                        DiscountCalculationService discountCalculationService,
                        PaymentValidationService paymentValidationService,
                        CustomerDebtRepository customerDebtRepository,
-                       NotificationService notificationService,
-                       EmployeeRepository employeeRepository,
                        NotificationService notificationService,
                        EmployeeRepository employeeRepository,
                        SaleMapper saleMapper,
@@ -138,14 +125,12 @@ public class SaleService extends BaseSecurityService {
         this.stockItemRepo = stockItemRepo;
         this.stockService = stockService;
         this.discountCalculationService = discountCalculationService;
-        this.paymentValidationService = paymentValidationService;
+        this.paymentValidationService = paymentValidationService;   
         this.customerDebtRepository = customerDebtRepository;
         this.saleMapper = saleMapper;
         this.stockItemMapper = stockItemMapper;
         this.salesIntegrationService = salesIntegrationService;
         this.customerDebtMapper = customerDebtMapper;
-        this.notificationService = notificationService;
-        this.employeeRepository = employeeRepository;
         this.notificationService = notificationService;
         this.employeeRepository = employeeRepository;
     }
@@ -1037,53 +1022,9 @@ public class SaleService extends BaseSecurityService {
     }
     
 
-    private void notifyDebtPaidFromRefund(CustomerDebt debt, Long saleId) {
-        if (debt == null || debt.getCustomer() == null || debt.getCustomer().getPharmacy() == null) {
-            return;
-        }
+  
 
-        Long pharmacyId = debt.getCustomer().getPharmacy().getId();
-        List<Long> recipients = getEligiblePharmacyStaff(pharmacyId);
-        if (recipients.isEmpty()) {
-            logger.debug("No eligible staff found for pharmacy {} to notify debt payment from refund {}", pharmacyId, debt.getId());
-            return;
-        }
-
-        Map<String, Object> data = new HashMap<>();
-        data.put("debtId", debt.getId());
-        data.put("customerId", debt.getCustomer().getId());
-        data.put("customerName", debt.getCustomer().getName());
-        data.put("source", "REFUND");
-        data.put("saleId", saleId);
-
-        String body = String.format("تم إغلاق دين العميل %s بعد معالجة مرتجع.", debt.getCustomer().getName());
-
-        for (Long userId : recipients) {
-            try {
-                NotificationRequest request = new NotificationRequest();
-                request.setUserId(userId);
-                request.setTitle("تم سداد دين عبر مرتجع");
-                request.setBody(body);
-                request.setNotificationType(NotificationType.DEBT_PAID);
-                request.setData(new HashMap<>(data));
-                notificationService.sendNotification(request);
-            } catch (Exception e) {
-                logger.warn("Failed to send debt paid notification from refund for user {}: {}", userId, e.getMessage());
-                // Don't fail the refund transaction if notification fails
-            }
-        }
-    }
-
-    private List<Long> getEligiblePharmacyStaff(Long pharmacyId) {
-        return employeeRepository.findByPharmacy_Id(pharmacyId).stream()
-            .filter(employee -> employee.getRole() != null)
-            .filter(employee -> {
-                String roleName = employee.getRole().getName();
-                return RoleConstants.PHARMACY_MANAGER.equals(roleName) || RoleConstants.PHARMACY_EMPLOYEE.equals(roleName);
-            })
-            .map(Employee::getId)
-            .collect(Collectors.toList());
-    }
+ 
     
 
 } 
