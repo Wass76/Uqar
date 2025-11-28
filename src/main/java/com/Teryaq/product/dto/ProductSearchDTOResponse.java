@@ -14,8 +14,12 @@ import lombok.NoArgsConstructor;
 @Builder
 public class ProductSearchDTOResponse {
     private Long id;
-    private String tradeName;
-    private String scientificName;
+    private String tradeName; // الاسم التجاري حسب اللغة المطلوبة (للتوافق مع الكود القديم)
+    private String tradeNameAr; // الاسم التجاري العربي
+    private String tradeNameEn; // الاسم التجاري الإنجليزي
+    private String scientificName; // الاسم العلمي حسب اللغة المطلوبة (للتوافق مع الكود القديم)
+    private String scientificNameAr; // الاسم العلمي العربي
+    private String scientificNameEn; // الاسم العلمي الإنجليزي
     private Set<String> barcodes;
    
     private String productTypeName;

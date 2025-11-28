@@ -1,21 +1,26 @@
 package com.Teryaq.moneybox.service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.Teryaq.moneybox.entity.MoneyBox;
 import com.Teryaq.moneybox.entity.MoneyBoxTransaction;
 import com.Teryaq.moneybox.enums.TransactionType;
 import com.Teryaq.moneybox.repository.MoneyBoxRepository;
 import com.Teryaq.moneybox.repository.MoneyBoxTransactionRepository;
 import com.Teryaq.user.Enum.Currency;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.LocalDateTime;
-import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Enhanced Money Box Audit Service
@@ -484,6 +489,7 @@ public class EnhancedMoneyBoxAuditService {
     
     private boolean isExpenseTransaction(TransactionType transactionType) {
         return transactionType == TransactionType.PURCHASE_PAYMENT ||
+               transactionType == TransactionType.SALE_REFUND || // ✅ ADDED: Sale refunds are expenses (money goes out)
                transactionType == TransactionType.CASH_WITHDRAWAL ||
                transactionType == TransactionType.EXPENSE ||
                transactionType == TransactionType.TRANSFER_OUT ||

@@ -1,14 +1,15 @@
 package com.Teryaq.product.dto;
 
+import java.time.LocalDate;
+import java.util.List;
+
 import com.Teryaq.product.Enum.ProductType;
 import com.fasterxml.jackson.annotation.JsonFormat;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.time.LocalDate;
-import java.util.List;
 
 @Data
 @Builder
@@ -19,7 +20,9 @@ public class StockProductOverallDTOResponse {
     // Product Identification
     private Long id;
     private Long productId;
-    private String productName;
+    private String productName; // الاسم حسب اللغة المطلوبة (للتوافق مع الكود القديم)
+    private String productNameAr; // الاسم العربي
+    private String productNameEn; // الاسم الإنجليزي
     private ProductType productType;
     private List<String> barcodes;
     

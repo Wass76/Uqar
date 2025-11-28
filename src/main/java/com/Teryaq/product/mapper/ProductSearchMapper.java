@@ -27,7 +27,7 @@ public class ProductSearchMapper {
     }
     
     public ProductSearchDTOResponse convertMasterProductToUnifiedDTO(MasterProduct product, String lang, Long pharmacyId, boolean dualCurrency) {
-        // الحصول على الترجمة
+        // الحصول على الترجمة حسب اللغة المطلوبة
         String translatedTradeName = product.getTranslations() != null
                 ? product.getTranslations().stream()
                 .filter(t -> t.getLanguage() != null && t.getLanguage().getCode() != null)
@@ -45,6 +45,43 @@ public class ProductSearchMapper {
                 .map(t -> t.getScientificName())
                 .orElse(product.getScientificName())
                 : product.getScientificName();
+        
+        // الحصول على الاسم العربي والإنجليزي دائماً
+        String tradeNameAr = product.getTranslations() != null
+                ? product.getTranslations().stream()
+                .filter(t -> t.getLanguage() != null && t.getLanguage().getCode() != null)
+                .filter(t -> t.getLanguage().getCode().trim().equalsIgnoreCase("ar"))
+                .findFirst()
+                .map(t -> t.getTradeName())
+                .orElse(product.getTradeName())
+                : product.getTradeName();
+        
+        String tradeNameEn = product.getTranslations() != null
+                ? product.getTranslations().stream()
+                .filter(t -> t.getLanguage() != null && t.getLanguage().getCode() != null)
+                .filter(t -> t.getLanguage().getCode().trim().equalsIgnoreCase("en"))
+                .findFirst()
+                .map(t -> t.getTradeName())
+                .orElse(product.getTradeName())
+                : product.getTradeName();
+        
+        String scientificNameAr = product.getTranslations() != null
+                ? product.getTranslations().stream()
+                .filter(t -> t.getLanguage() != null && t.getLanguage().getCode() != null)
+                .filter(t -> t.getLanguage().getCode().trim().equalsIgnoreCase("ar"))
+                .findFirst()
+                .map(t -> t.getScientificName())
+                .orElse(product.getScientificName())
+                : product.getScientificName();
+        
+        String scientificNameEn = product.getTranslations() != null
+                ? product.getTranslations().stream()
+                .filter(t -> t.getLanguage() != null && t.getLanguage().getCode() != null)
+                .filter(t -> t.getLanguage().getCode().trim().equalsIgnoreCase("en"))
+                .findFirst()
+                .map(t -> t.getScientificName())
+                .orElse(product.getScientificName())
+                : product.getScientificName();
 
         String translatedNotes = product.getNotes();
         
@@ -53,7 +90,11 @@ public class ProductSearchMapper {
         return ProductSearchDTOResponse.builder()
                 .id(product.getId())
                 .tradeName(translatedTradeName)
+                .tradeNameAr(tradeNameAr)
+                .tradeNameEn(tradeNameEn)
                 .scientificName(translatedScientificName)
+                .scientificNameAr(scientificNameAr)
+                .scientificNameEn(scientificNameEn)
                 .barcodes(product.getBarcode() != null ? Set.of(product.getBarcode()) : new HashSet<>())
                 .productTypeName(ProductType.MASTER.getTranslatedName(lang))                
                 .requiresPrescription(product.getRequiresPrescription())
@@ -116,7 +157,7 @@ public class ProductSearchMapper {
     }
     
     public ProductSearchDTOResponse convertPharmacyProductToUnifiedDTO(PharmacyProduct product, String lang, Long pharmacyId, boolean dualCurrency) {
-        // الحصول على الترجمة
+        // الحصول على الترجمة حسب اللغة المطلوبة
         String translatedTradeName = product.getTranslations() != null
                 ? product.getTranslations().stream()
                 .filter(t -> t.getLanguage() != null && t.getLanguage().getCode() != null)
@@ -134,6 +175,43 @@ public class ProductSearchMapper {
                 .map(t -> t.getScientificName())
                 .orElse(product.getScientificName())
                 : product.getScientificName();
+        
+        // الحصول على الاسم العربي والإنجليزي دائماً
+        String tradeNameAr = product.getTranslations() != null
+                ? product.getTranslations().stream()
+                .filter(t -> t.getLanguage() != null && t.getLanguage().getCode() != null)
+                .filter(t -> t.getLanguage().getCode().trim().equalsIgnoreCase("ar"))
+                .findFirst()
+                .map(t -> t.getTradeName())
+                .orElse(product.getTradeName())
+                : product.getTradeName();
+        
+        String tradeNameEn = product.getTranslations() != null
+                ? product.getTranslations().stream()
+                .filter(t -> t.getLanguage() != null && t.getLanguage().getCode() != null)
+                .filter(t -> t.getLanguage().getCode().trim().equalsIgnoreCase("en"))
+                .findFirst()
+                .map(t -> t.getTradeName())
+                .orElse(product.getTradeName())
+                : product.getTradeName();
+        
+        String scientificNameAr = product.getTranslations() != null
+                ? product.getTranslations().stream()
+                .filter(t -> t.getLanguage() != null && t.getLanguage().getCode() != null)
+                .filter(t -> t.getLanguage().getCode().trim().equalsIgnoreCase("ar"))
+                .findFirst()
+                .map(t -> t.getScientificName())
+                .orElse(product.getScientificName())
+                : product.getScientificName();
+        
+        String scientificNameEn = product.getTranslations() != null
+                ? product.getTranslations().stream()
+                .filter(t -> t.getLanguage() != null && t.getLanguage().getCode() != null)
+                .filter(t -> t.getLanguage().getCode().trim().equalsIgnoreCase("en"))
+                .findFirst()
+                .map(t -> t.getScientificName())
+                .orElse(product.getScientificName())
+                : product.getScientificName();
 
         String translatedNotes = product.getNotes();
         
@@ -142,7 +220,11 @@ public class ProductSearchMapper {
         return ProductSearchDTOResponse.builder()
                 .id(product.getId())
                 .tradeName(translatedTradeName)
+                .tradeNameAr(tradeNameAr)
+                .tradeNameEn(tradeNameEn)
                 .scientificName(translatedScientificName)
+                .scientificNameAr(scientificNameAr)
+                .scientificNameEn(scientificNameEn)
                 .barcodes(product.getBarcodes() != null ? 
                     product.getBarcodes().stream()
                         .map(barcode -> barcode.getBarcode())

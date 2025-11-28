@@ -3,7 +3,9 @@ package com.Teryaq.product.mapper;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -338,6 +340,41 @@ public class StockItemMapper {
             .orElse(null);
     }
     
+    /**
+     * الحصول على الاسم العربي والإنجليزي معاً
+     */
+    public Map<String, String> getProductNames(Long productId, ProductType productType) {
+        Map<String, String> names = new HashMap<>();
+        names.put("ar", "Unknown Product");
+        names.put("en", "Unknown Product");
+        
+        try {
+            if (productType == ProductType.PHARMACY) {
+                Optional<PharmacyProduct> pharmacyProduct = pharmacyProductRepo.findById(productId);
+                if (pharmacyProduct.isPresent()) {
+                    PharmacyProduct product = pharmacyProduct.get();
+                    String arabicName = getTranslatedPharmacyProductName(product, "ar");
+                    String englishName = getTranslatedPharmacyProductName(product, "en");
+                    names.put("ar", arabicName != null ? arabicName : product.getTradeName());
+                    names.put("en", englishName != null ? englishName : product.getTradeName());
+                }
+            } else if (productType == ProductType.MASTER) {
+                Optional<MasterProduct> masterProduct = masterProductRepo.findById(productId);
+                if (masterProduct.isPresent()) {
+                    MasterProduct product = masterProduct.get();
+                    String arabicName = getTranslatedMasterProductName(product, "ar");
+                    String englishName = getTranslatedMasterProductName(product, "en");
+                    names.put("ar", arabicName != null ? arabicName : product.getTradeName());
+                    names.put("en", englishName != null ? englishName : product.getTradeName());
+                }
+            }
+        } catch (Exception e) {
+            // Keep default values
+        }
+        
+        return names;
+    }
+    
     public boolean isProductRequiresPrescription(Long productId, ProductType productType) {
         try {
             if (productType == ProductType.PHARMACY) {
@@ -461,7 +498,14 @@ public class StockItemMapper {
         // Round to 2 decimal places
         totalValue = Math.round(totalValue * 100.0) / 100.0;
         
+        // الحصول على الاسم حسب اللغة المطلوبة
         String productName = getProductName(productId, productType, lang);
+        
+        // الحصول على الاسم العربي والإنجليزي معاً
+        Map<String, String> productNames = getProductNames(productId, productType);
+        String productNameAr = productNames.get("ar");
+        String productNameEn = productNames.get("en");
+        
         List<String> categories = getCategories(productId, productType);
         Float sellingPrice = getProductSellingPrice(productId, productType);
         Integer minStockLevel = getMinStockLevel(productId, productType);
@@ -491,6 +535,8 @@ public class StockItemMapper {
             .id(stockItems.get(0).getId())
             .productId(productId)
             .productName(productName)
+            .productNameAr(productNameAr)
+            .productNameEn(productNameEn)
             .productType(productType)
             .barcodes(barcodes)
             .totalQuantity(totalQuantity)
