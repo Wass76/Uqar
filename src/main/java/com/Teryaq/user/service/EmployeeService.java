@@ -12,7 +12,6 @@ import com.Teryaq.user.entity.EmployeeWorkingHours;
 import com.Teryaq.user.entity.Pharmacy;
 import com.Teryaq.user.entity.Role;
 import com.Teryaq.user.entity.User;
-import com.Teryaq.user.mapper.WorkShiftMapper;
 import com.Teryaq.user.mapper.EmployeeMapper;
 import com.Teryaq.user.repository.EmployeeRepository;
 import com.Teryaq.user.repository.EmployeeWorkingHoursRepository;
@@ -27,7 +26,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.ArrayList;
-import java.util.Optional;
 import java.time.DayOfWeek;
 import java.util.logging.Logger;
 import com.Teryaq.user.entity.WorkShift;
@@ -40,20 +38,17 @@ public class EmployeeService extends BaseSecurityService {
     private final EmployeeWorkingHoursRepository employeeWorkingHoursRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
-    private final UserService userService;
     
     public EmployeeService(EmployeeRepository employeeRepository,
                          EmployeeWorkingHoursRepository employeeWorkingHoursRepository,
                          RoleRepository roleRepository,
                          PasswordEncoder passwordEncoder,
-                         UserService userService,
                          UserRepository userRepository) {
         super(userRepository);
         this.employeeRepository = employeeRepository;
         this.employeeWorkingHoursRepository = employeeWorkingHoursRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
-        this.userService = userService;
     }
     
     Logger logger = Logger.getLogger(EmployeeService.class.getName());

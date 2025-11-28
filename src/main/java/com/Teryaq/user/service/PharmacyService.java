@@ -57,8 +57,7 @@ public class PharmacyService {
     @Autowired
     private UserService userService;
     
-    @Autowired
-    private EmployeeService employeeService;
+   
 
     Logger logger = Logger.getLogger(PharmacyService.class.getName());
 

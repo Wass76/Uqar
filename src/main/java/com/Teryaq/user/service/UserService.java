@@ -17,14 +17,10 @@ import com.Teryaq.utils.exception.ResourceNotFoundException;
 import com.Teryaq.utils.exception.TooManyRequestException;
 import com.Teryaq.user.dto.AuthenticationRequest;
 import com.Teryaq.user.dto.UserAuthenticationResponse;
-import com.Teryaq.utils.Validator.ObjectsValidator;
 import io.github.resilience4j.ratelimiter.RateLimiter;
 import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -43,7 +39,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional
 public class UserService {
-    private static final Logger log = LoggerFactory.getLogger(UserService.class);
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
@@ -54,8 +49,7 @@ public class UserService {
     private final RateLimiterConfig rateLimiterConfig;
     private final RateLimiterRegistry rateLimiterRegistry;
     private final UserMapper userMapper;
-    @Autowired
-    private ObjectsValidator<AuthenticationRequest> authenticationRequestValidator;
+    
 
     /**
      * Create a new user with territory assignments using BASE entity IDs

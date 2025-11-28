@@ -1,52 +1,61 @@
 package com.Teryaq.purchase.service;
 
-import com.Teryaq.moneybox.repository.MoneyBoxRepository;
-import com.Teryaq.product.Enum.OrderStatus;
-import com.Teryaq.product.Enum.ProductType;
-import com.Teryaq.product.dto.*;
-import com.Teryaq.purchase.dto.PurchaseInvoiceDTORequest;
-import com.Teryaq.purchase.dto.PurchaseInvoiceDTOResponse;
-import com.Teryaq.purchase.dto.PurchaseInvoiceItemDTORequest;
-import com.Teryaq.purchase.entity.PurchaseInvoice;
-import com.Teryaq.purchase.entity.PurchaseInvoiceItem;
-import com.Teryaq.purchase.entity.PurchaseOrder;
-import com.Teryaq.product.entity.PharmacyProduct;
-import com.Teryaq.product.entity.StockItem;
-import com.Teryaq.product.entity.MasterProduct;
-import com.Teryaq.purchase.mapper.PurchaseInvoiceMapper;
-import com.Teryaq.purchase.repository.PurchaseInvoiceRepo;
-import com.Teryaq.purchase.repository.PurchaseInvoiceItemRepo;
-import com.Teryaq.purchase.repository.PurchaseOrderRepo;
-import com.Teryaq.product.repo.PharmacyProductRepo;
-import com.Teryaq.product.repo.StockItemRepo;
-import com.Teryaq.product.repo.MasterProductRepo;
-import com.Teryaq.user.Enum.Currency;
-import com.Teryaq.user.entity.Pharmacy;
-import com.Teryaq.user.entity.Supplier;
-import com.Teryaq.user.repository.SupplierRepository;
-import com.Teryaq.user.service.BaseSecurityService;
-import com.Teryaq.utils.exception.ConflictException;
-import com.Teryaq.utils.exception.ResourceNotFoundException;
-import com.Teryaq.moneybox.service.PurchaseIntegrationService;
-import com.Teryaq.moneybox.service.ExchangeRateService;
-import com.Teryaq.moneybox.service.EnhancedMoneyBoxAuditService;
-import jakarta.transaction.Transactional;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.time.LocalDateTime;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+
+import com.Teryaq.moneybox.repository.MoneyBoxRepository;
+import com.Teryaq.moneybox.service.EnhancedMoneyBoxAuditService;
+import com.Teryaq.moneybox.service.ExchangeRateService;
+import com.Teryaq.moneybox.service.PurchaseIntegrationService;
+import com.Teryaq.notification.dto.NotificationRequest;
+import com.Teryaq.notification.enums.NotificationType;
+import com.Teryaq.notification.service.NotificationService;
+import com.Teryaq.product.Enum.OrderStatus;
+import com.Teryaq.product.Enum.ProductType;
+import com.Teryaq.product.dto.PaginationDTO;
+import com.Teryaq.product.entity.MasterProduct;
+import com.Teryaq.product.entity.PharmacyProduct;
+import com.Teryaq.product.entity.StockItem;
+import com.Teryaq.product.repo.MasterProductRepo;
+import com.Teryaq.product.repo.PharmacyProductRepo;
+import com.Teryaq.product.repo.StockItemRepo;
+import com.Teryaq.purchase.dto.PurchaseInvoiceDTORequest;
+import com.Teryaq.purchase.dto.PurchaseInvoiceDTOResponse;
+import com.Teryaq.purchase.dto.PurchaseInvoiceItemDTORequest;
+import com.Teryaq.purchase.entity.PurchaseInvoice;
+import com.Teryaq.purchase.entity.PurchaseInvoiceItem;
+import com.Teryaq.purchase.entity.PurchaseOrder;
+import com.Teryaq.purchase.mapper.PurchaseInvoiceMapper;
+import com.Teryaq.purchase.repository.PurchaseInvoiceItemRepo;
+import com.Teryaq.purchase.repository.PurchaseInvoiceRepo;
+import com.Teryaq.purchase.repository.PurchaseOrderRepo;
+import com.Teryaq.user.Enum.Currency;
+import com.Teryaq.user.config.RoleConstants;
+import com.Teryaq.user.entity.Employee;
+import com.Teryaq.user.entity.Pharmacy;
+import com.Teryaq.user.entity.Supplier;
+import com.Teryaq.user.repository.EmployeeRepository;
+import com.Teryaq.user.repository.SupplierRepository;
+import com.Teryaq.user.service.BaseSecurityService;
+import com.Teryaq.utils.exception.ConflictException;
 import com.Teryaq.utils.exception.RequestNotValidException;
-import java.util.Arrays;
+import com.Teryaq.utils.exception.ResourceNotFoundException;
+
+import jakarta.transaction.Transactional;
 
 @Service
 public class PurchaseInvoiceService extends BaseSecurityService {
@@ -63,6 +72,9 @@ public class PurchaseInvoiceService extends BaseSecurityService {
     private final ExchangeRateService exchangeRateService;
     private final EnhancedMoneyBoxAuditService enhancedAuditService;
     private final MoneyBoxRepository moneyBoxRepository;
+    private final NotificationService notificationService;
+    private final EmployeeRepository employeeRepository;
+    private final double purchaseLimit;
 
     public PurchaseInvoiceService(PurchaseInvoiceRepo purchaseInvoiceRepo,
                                   PurchaseInvoiceItemRepo purchaseInvoiceItemRepo,
@@ -75,6 +87,9 @@ public class PurchaseInvoiceService extends BaseSecurityService {
                                   PurchaseIntegrationService purchaseIntegrationService,
                                   ExchangeRateService exchangeRateService,
                                   EnhancedMoneyBoxAuditService enhancedAuditService,
+                                  NotificationService notificationService,
+                                  EmployeeRepository employeeRepository,
+                                  @Value("${notifications.purchase.financial-limit:100000}") double purchaseLimit,
                                   com.Teryaq.user.repository.UserRepository userRepository, MoneyBoxRepository moneyBoxRepository) {
         super(userRepository);
         this.purchaseInvoiceRepo = purchaseInvoiceRepo;
@@ -89,6 +104,9 @@ public class PurchaseInvoiceService extends BaseSecurityService {
         this.exchangeRateService = exchangeRateService;
         this.enhancedAuditService = enhancedAuditService;
         this.moneyBoxRepository = moneyBoxRepository;
+        this.notificationService = notificationService;
+        this.employeeRepository = employeeRepository;
+        this.purchaseLimit = purchaseLimit;
     }
 
     @Transactional
@@ -103,6 +121,7 @@ public class PurchaseInvoiceService extends BaseSecurityService {
         
         // Create and save invoice
         PurchaseInvoice invoice = createAndSaveInvoice(request, supplier, items, order, currentPharmacy);
+        notifyPurchaseLimitExceeded(invoice);
         
         // Update order status
         updateOrderStatus(order);
@@ -178,6 +197,7 @@ public class PurchaseInvoiceService extends BaseSecurityService {
         calculateInvoiceTotal(invoice);
         
         PurchaseInvoice saved = purchaseInvoiceRepo.save(invoice);
+        notifyPurchaseLimitExceeded(saved);
         
         // Integrate with Money Box for cash payments (if payment method changed to cash)
         if (request.getPaymentMethod() == com.Teryaq.product.Enum.PaymentMethod.CASH) {
@@ -303,6 +323,65 @@ public class PurchaseInvoiceService extends BaseSecurityService {
         }
         
         return order;
+    }
+
+    private void notifyPurchaseLimitExceeded(PurchaseInvoice invoice) {
+        if (invoice == null || invoice.getTotal() == null || invoice.getPharmacy() == null) {
+            return;
+        }
+
+        if (invoice.getTotal() <= purchaseLimit) {
+            return;
+        }
+
+        Long pharmacyId = invoice.getPharmacy().getId();
+        List<Long> recipients = getEligiblePharmacyStaff(pharmacyId);
+        if (recipients.isEmpty()) {
+            logger.debug("No eligible staff found for pharmacy {} to notify purchase limit exceedance for invoice {}", pharmacyId, invoice.getId());
+            return;
+        }
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("invoiceId", invoice.getId());
+        data.put("invoiceNumber", invoice.getInvoiceNumber());
+        data.put("supplierId", invoice.getSupplier() != null ? invoice.getSupplier().getId() : null);
+        data.put("supplierName", invoice.getSupplier() != null ? invoice.getSupplier().getName() : null);
+        data.put("total", invoice.getTotal());
+        data.put("currency", invoice.getCurrency());
+        data.put("purchaseLimit", purchaseLimit);
+
+        String invoiceIdentifier = invoice.getInvoiceNumber() != null ? invoice.getInvoiceNumber() : String.valueOf(invoice.getId());
+        String body = String.format("فاتورة الشراء رقم %s تجاوزت الحد المالي %.2f. إجمالي الفاتورة %.2f %s.",
+                invoiceIdentifier,
+                purchaseLimit,
+                invoice.getTotal(),
+                invoice.getCurrency());
+
+        for (Long userId : recipients) {
+            try {
+                NotificationRequest request = new NotificationRequest();
+                request.setUserId(userId);
+                request.setTitle("تنبيه: تجاوز حد الشراء");
+                request.setBody(body);
+                request.setNotificationType(NotificationType.PURCHASE_LIMIT_EXCEEDED);
+                request.setData(new HashMap<>(data));
+                notificationService.sendNotification(request);
+            } catch (Exception e) {
+                logger.warn("Failed to send purchase limit exceeded notification for user {}: {}", userId, e.getMessage());
+                // Don't fail the invoice creation/editing transaction if notification fails
+            }
+        }
+    }
+
+    private List<Long> getEligiblePharmacyStaff(Long pharmacyId) {
+        return employeeRepository.findByPharmacy_Id(pharmacyId).stream()
+            .filter(employee -> employee.getRole() != null)
+            .filter(employee -> {
+                String roleName = employee.getRole().getName();
+                return RoleConstants.PHARMACY_MANAGER.equals(roleName) || RoleConstants.PHARMACY_EMPLOYEE.equals(roleName);
+            })
+            .map(Employee::getId)
+            .collect(Collectors.toList());
     }
 
     private Supplier getSupplier(Long supplierId) {

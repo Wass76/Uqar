@@ -2,14 +2,12 @@ package com.Teryaq.user.service;
 
 import com.Teryaq.user.entity.User;
 import com.Teryaq.user.repository.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service("authz")
 public class SecurityExpressionService extends BaseSecurityService {
 
-    @Autowired
-    private UserRepository userRepository;
+
 
     public SecurityExpressionService(UserRepository userRepository) {
         super(userRepository);

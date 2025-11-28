@@ -4,8 +4,6 @@ import com.Teryaq.user.dto.UserResponseDTO;
 import com.Teryaq.user.entity.User;
 import com.Teryaq.user.entity.Employee;
 import com.Teryaq.user.entity.Pharmacy;
-import com.Teryaq.user.mapper.RoleMapper;
-import com.Teryaq.user.mapper.PermissionMapper;
 import org.springframework.stereotype.Component;
 
 import java.util.stream.Collectors;
