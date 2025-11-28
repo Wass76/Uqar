@@ -1,6 +1,5 @@
 package com.Teryaq.purchase.service;
 
-import com.Teryaq.moneybox.enums.TransactionType;
 import com.Teryaq.moneybox.repository.MoneyBoxRepository;
 import com.Teryaq.product.Enum.OrderStatus;
 import com.Teryaq.product.Enum.ProductType;
