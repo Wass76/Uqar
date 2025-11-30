@@ -182,15 +182,7 @@
                 <enabled>false</enabled>
             </snapshots>
         </repository>
-        <repository>
-            <id>google</id>
-            <name>Google Maven</name>
-            <url>https://maven.google.com</url>
-            <releases>
-                <enabled>true</enabled>
-                <updatePolicy>always</updatePolicy>
-            </releases>
-        </repository>
+        <!-- Google Maven repository removed - Firebase Admin SDK is available in Maven Central -->
         <repository>
             <id>aliyun</id>
             <name>Aliyun Maven</name>
