@@ -1,10 +1,5 @@
 package com.Teryaq.notification.controller;
 
-import java.util.List;
-
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -23,6 +18,7 @@ import com.Teryaq.notification.dto.NotificationResponse;
 import com.Teryaq.notification.entity.DeviceToken;
 import com.Teryaq.notification.service.DeviceTokenService;
 import com.Teryaq.notification.service.NotificationService;
+import com.Teryaq.product.dto.PaginationDTO;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -75,18 +71,33 @@ public class NotificationController {
     
     @PreAuthorize("hasRole('PHARMACY_MANAGER') or hasRole('PHARMACY_EMPLOYEE')")
     @GetMapping
-    @Operation(summary = "Get user notifications", description = "Get all notifications for the current user")
-    public ResponseEntity<Page<NotificationResponse>> getUserNotifications(
-            @PageableDefault(size = 20) Pageable pageable) {
-        Page<NotificationResponse> notifications = notificationService.getUserNotifications(pageable);
+    @Operation(summary = "Get user notifications", description = "Get all notifications for the current user with enhanced pagination")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Successfully retrieved notifications"),
+        @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+    public ResponseEntity<PaginationDTO<NotificationResponse>> getUserNotifications(
+            @Parameter(description = "Page number (0-based)", example = "0") 
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Number of items per page", example = "10") 
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "10") int size) {
+        PaginationDTO<NotificationResponse> notifications = notificationService.getUserNotificationsPaginated(page, size);
         return ResponseEntity.ok(notifications);
     }
     
     @PreAuthorize("hasRole('PHARMACY_MANAGER') or hasRole('PHARMACY_EMPLOYEE')")
     @GetMapping("/unread")
-    @Operation(summary = "Get unread notifications", description = "Get all unread notifications for the current user")
-    public ResponseEntity<List<NotificationResponse>> getUnreadNotifications() {
-        List<NotificationResponse> notifications = notificationService.getUnreadNotifications();
+    @Operation(summary = "Get unread notifications", description = "Get all unread notifications for the current user with enhanced pagination")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Successfully retrieved unread notifications"),
+        @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+    public ResponseEntity<PaginationDTO<NotificationResponse>> getUnreadNotifications(
+            @Parameter(description = "Page number (0-based)", example = "0") 
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Number of items per page", example = "10") 
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "10") int size) {
+        PaginationDTO<NotificationResponse> notifications = notificationService.getUnreadNotificationsPaginated(page, size);
         return ResponseEntity.ok(notifications);
     }
     

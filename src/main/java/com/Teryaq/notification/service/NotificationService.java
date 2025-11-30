@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +17,7 @@ import com.Teryaq.notification.dto.NotificationResponse;
 import com.Teryaq.notification.entity.Notification;
 import com.Teryaq.notification.mapper.NotificationMapper;
 import com.Teryaq.notification.repository.NotificationRepository;
+import com.Teryaq.product.dto.PaginationDTO;
 import com.Teryaq.user.entity.User;
 import com.Teryaq.user.repository.UserRepository;
 import com.Teryaq.user.service.BaseSecurityService;
@@ -53,7 +55,25 @@ public class NotificationService extends BaseSecurityService {
     }
     
     /**
-     * الحصول على إشعارات المستخدم
+     * الحصول على إشعارات المستخدم (مع pagination محسّن)
+     */
+    public PaginationDTO<NotificationResponse> getUserNotificationsPaginated(int page, int size) {
+        Long currentUserId = getCurrentUser().getId();
+        User user = userRepository.findById(currentUserId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Notification> notifications = notificationRepository.findByUserOrderByCreatedAtDesc(user, pageable);
+        
+        List<NotificationResponse> responses = notifications.getContent().stream()
+            .map(notificationMapper::toResponse)
+            .collect(Collectors.toList());
+        
+        return new PaginationDTO<>(responses, page, size, notifications.getTotalElements());
+    }
+    
+    /**
+     * الحصول على إشعارات المستخدم (للتوافق مع الكود القديم)
      */
     public Page<NotificationResponse> getUserNotifications(Pageable pageable) {
         Long currentUserId = getCurrentUser().getId();
@@ -65,7 +85,23 @@ public class NotificationService extends BaseSecurityService {
     }
     
     /**
-     * الحصول على الإشعارات غير المقروءة
+     * الحصول على الإشعارات غير المقروءة (مع pagination محسّن)
+     */
+    public PaginationDTO<NotificationResponse> getUnreadNotificationsPaginated(int page, int size) {
+        Long currentUserId = getCurrentUser().getId();
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Notification> notifications = notificationRepository
+            .findByUserIdAndReadAtIsNullOrderByCreatedAtDesc(currentUserId, pageable);
+        
+        List<NotificationResponse> responses = notifications.getContent().stream()
+            .map(notificationMapper::toResponse)
+            .collect(Collectors.toList());
+        
+        return new PaginationDTO<>(responses, page, size, notifications.getTotalElements());
+    }
+    
+    /**
+     * الحصول على الإشعارات غير المقروءة (للتوافق مع الكود القديم)
      */
     public List<NotificationResponse> getUnreadNotifications() {
         Long currentUserId = getCurrentUser().getId();

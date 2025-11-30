@@ -914,7 +914,6 @@ public class SaleService extends BaseSecurityService {
             debt.setStatus("PAID");
             debt.setPaidAt(LocalDate.now());
             notifyDebtPaidFromRefund(debt, saleId);
-            notifyDebtPaidFromRefund(debt, saleId);
         }
         
         customerDebtRepository.save(debt);

@@ -1,13 +1,15 @@
 package com.Teryaq.notification.dto;
 
+import java.time.LocalDateTime;
+import java.util.Map;
+
 import com.Teryaq.notification.enums.NotificationType;
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.time.LocalDateTime;
-import java.util.Map;
 
 @Data
 @Builder
@@ -21,9 +23,16 @@ public class NotificationResponse {
     private String body;
     private NotificationType notificationType;
     private Map<String, Object> data;
+    
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime sentAt;
+    
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime readAt;
+    
     private String status;
+    
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdAt;
 }
 
