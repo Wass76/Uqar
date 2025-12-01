@@ -2,6 +2,8 @@ package com.Teryaq.notification.entity;
 
 import com.Teryaq.user.entity.User;
 import com.Teryaq.utils.entity.AuditedEntity;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -23,11 +25,18 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties({"createdBy", "lastModifiedBy", "createdByUserType", "lastModifiedByUserType"})  // ✅ إخفاء حقول Auditing من الـ response
 public class DeviceToken extends AuditedEntity {
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
+    @JsonIgnore  // ✅ منع serialize الـ User proxy
     private User user;
+    
+    // Getter للـ userId فقط (بدون serialize الـ User كامل)
+    public Long getUserId() {
+        return user != null ? user.getId() : null;
+    }
     
     @Column(name = "device_token", nullable = false, columnDefinition = "TEXT")
     private String deviceToken;

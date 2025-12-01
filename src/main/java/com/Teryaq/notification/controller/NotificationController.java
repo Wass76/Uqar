@@ -42,7 +42,6 @@ public class NotificationController {
         this.deviceTokenService = deviceTokenService;
     }
     
-    @PreAuthorize("hasRole('PHARMACY_MANAGER') or hasRole('PHARMACY_EMPLOYEE')")
     @PostMapping("/register-token")
     @Operation(summary = "Register device token", description = "Register a device token for push notifications")
     @ApiResponses(value = {
@@ -58,7 +57,6 @@ public class NotificationController {
         return ResponseEntity.ok(deviceToken);
     }   
     
-    @PreAuthorize("hasRole('PHARMACY_MANAGER') or hasRole('PHARMACY_EMPLOYEE')")
     @DeleteMapping("/unregister-token/{deviceToken}")
     @Operation(summary = "Unregister device token", description = "Unregister a device token")
     public ResponseEntity<Void> unregisterDeviceToken(
@@ -69,7 +67,6 @@ public class NotificationController {
         return ResponseEntity.ok().build();
     }
     
-    @PreAuthorize("hasRole('PHARMACY_MANAGER') or hasRole('PHARMACY_EMPLOYEE')")
     @GetMapping
     @Operation(summary = "Get user notifications", description = "Get all notifications for the current user with enhanced pagination")
     @ApiResponses(value = {
@@ -85,7 +82,6 @@ public class NotificationController {
         return ResponseEntity.ok(notifications);
     }
     
-    @PreAuthorize("hasRole('PHARMACY_MANAGER') or hasRole('PHARMACY_EMPLOYEE')")
     @GetMapping("/unread")
     @Operation(summary = "Get unread notifications", description = "Get all unread notifications for the current user with enhanced pagination")
     @ApiResponses(value = {
@@ -101,7 +97,6 @@ public class NotificationController {
         return ResponseEntity.ok(notifications);
     }
     
-    @PreAuthorize("hasRole('PHARMACY_MANAGER') or hasRole('PHARMACY_EMPLOYEE')")
     @GetMapping("/unread/count")
     @Operation(summary = "Get unread notifications count", description = "Get count of unread notifications")
     public ResponseEntity<Long> getUnreadCount() {
@@ -109,7 +104,6 @@ public class NotificationController {
         return ResponseEntity.ok(count);
     }
     
-    @PreAuthorize("hasRole('PHARMACY_MANAGER') or hasRole('PHARMACY_EMPLOYEE')")
     @PutMapping("/{id}/read")
     @Operation(summary = "Mark notification as read", description = "Mark a notification as read")
     public ResponseEntity<NotificationResponse> markAsRead(

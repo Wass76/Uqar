@@ -1,18 +1,19 @@
 package com.Teryaq.notification.service;
 
-import com.Teryaq.notification.dto.DeviceTokenRequest;
-import com.Teryaq.notification.entity.DeviceToken;
-import com.Teryaq.notification.repository.DeviceTokenRepository;
-import com.Teryaq.user.entity.User;
-import com.Teryaq.user.repository.UserRepository;
-import com.Teryaq.utils.exception.ResourceNotFoundException;
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import com.Teryaq.notification.dto.DeviceTokenRequest;
+import com.Teryaq.notification.entity.DeviceToken;
+import com.Teryaq.notification.repository.DeviceTokenRepository;
+import com.Teryaq.user.entity.User;
+import com.Teryaq.user.repository.UserRepository;
+import com.Teryaq.utils.exception.ResourceNotFoundException;
 
 @Service
 @Transactional

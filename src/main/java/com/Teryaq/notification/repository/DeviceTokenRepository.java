@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.Teryaq.notification.entity.DeviceToken;
@@ -14,7 +16,8 @@ public interface DeviceTokenRepository extends JpaRepository<DeviceToken, Long> 
     
     List<DeviceToken> findByUserAndIsActiveTrue(User user);
     
-    List<DeviceToken> findByUserIdAndIsActiveTrue(Long userId);
+    @Query("SELECT dt FROM DeviceToken dt WHERE dt.user.id = :userId AND dt.isActive = true")
+    List<DeviceToken> findByUserIdAndIsActiveTrue(@Param("userId") Long userId);
     
     Optional<DeviceToken> findByDeviceTokenAndIsActiveTrue(String deviceToken);
     
