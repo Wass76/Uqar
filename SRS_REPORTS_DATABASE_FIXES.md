@@ -215,7 +215,7 @@ GET /api/v1/reports/test/purchase/daily?pharmacyId=1&startDate=2024-01-01&endDat
 ## 📁 **Updated File Structure**
 
 ```
-src/main/java/com/Teryaq/reports/
+src/main/java/com/Uqar/reports/
 ├── controller/
 │   ├── ReportController.java          # Main REST controller
 │   └── ReportTestController.java       # Test controller

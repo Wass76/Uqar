@@ -250,7 +250,7 @@ def get_default_db_config():
         'port': 5432,
         'username': 'postgres',
         'password': 'password',
-        'database': 'teryaq'
+        'database': 'Uqar'
     }
 
 def parse_db_config(config_str: Optional[str]) -> Dict[str, Any]:
@@ -267,7 +267,7 @@ def parse_db_config(config_str: Optional[str]) -> Dict[str, Any]:
             # Parse PostgreSQL connection string
             parts = config_str.replace('postgresql://', '').split('/')
             auth_host = parts[0]
-            database = parts[1] if len(parts) > 1 else 'teryaq'
+            database = parts[1] if len(parts) > 1 else 'Uqar'
 
             if '@' in auth_host:
                 auth, host_port = auth_host.split('@')
@@ -457,8 +457,8 @@ def main():
     if len(sys.argv) < 2:
         logging.error("Usage: python3 extract_for_spring_boot.py <excel_file_path> [database_config]")
         logging.error("Database config examples:")
-        logging.error("  postgresql://username:password@localhost:5432/teryaq")
-        logging.error("  postgresql://postgres:password@postgres:5432/teryaq (Docker)")
+        logging.error("  postgresql://username:password@localhost:5432/Uqar")
+        logging.error("  postgresql://postgres:password@postgres:5432/Uqar (Docker)")
         logging.error("  mysql://username:password@localhost:3306/pharmaceutical_db")
         logging.error("  sqlite:///path/to/database.db")
         sys.exit(1)

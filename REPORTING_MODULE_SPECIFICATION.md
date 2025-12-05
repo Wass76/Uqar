@@ -1,8 +1,8 @@
-# 📊 Teryaq Pharmacy Management System - Reporting Module Specification
+# 📊 Uqar Pharmacy Management System - Reporting Module Specification
 
 ## 📋 **Document Overview**
 
-This document serves as the **complete reference** for implementing the reporting feature in the Teryaq Pharmacy Management System. It includes:
+This document serves as the **complete reference** for implementing the reporting feature in the Uqar Pharmacy Management System. It includes:
 
 1. **SRS Requirements Analysis** - What the SRS specifies for reports
 2. **Enhanced Features** - Additional features beyond SRS requirements
@@ -165,7 +165,7 @@ GET /api/v1/pharmacy/reports/purchases/invoice-summary
 ### **📁 Directory Structure**
 
 ```
-src/main/java/com/Teryaq/reports/
+src/main/java/com/Uqar/reports/
 ├── controller/
 │   ├── AdminReportController.java          # System Admin Reports
 │   ├── PharmacyReportController.java       # Pharmacy Management Reports
