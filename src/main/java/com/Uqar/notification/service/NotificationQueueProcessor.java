@@ -5,6 +5,7 @@ import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -36,9 +37,10 @@ public class NotificationQueueProcessor {
     private final DeviceTokenRepository deviceTokenRepository;
     private final FirebaseMessagingService firebaseMessagingService;
 
+    @Autowired
     public NotificationQueueProcessor(NotificationRepository notificationRepository,
                                     DeviceTokenRepository deviceTokenRepository,
-                                    FirebaseMessagingService firebaseMessagingService) {
+                                    @Autowired(required = false) FirebaseMessagingService firebaseMessagingService) {
         this.notificationRepository = notificationRepository;
         this.deviceTokenRepository = deviceTokenRepository;
         this.firebaseMessagingService = firebaseMessagingService;
@@ -49,15 +51,6 @@ public class NotificationQueueProcessor {
         } else {
             logger.info("NotificationQueueProcessor initialized with FirebaseMessagingService");
         }
-    }
-    
-    /**
-     * Alternative constructor for when FirebaseMessagingService is not available.
-     * This allows the component to be created even if Firebase is not configured.
-     */
-    public NotificationQueueProcessor(NotificationRepository notificationRepository,
-                                    DeviceTokenRepository deviceTokenRepository) {
-        this(notificationRepository, deviceTokenRepository, null);
     }
 
     /**
