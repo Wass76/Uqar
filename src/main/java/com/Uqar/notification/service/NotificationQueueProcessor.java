@@ -5,12 +5,13 @@ import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Optional;
 
 import com.Uqar.notification.dto.FCMNotificationDTO;
 import com.Uqar.notification.entity.DeviceToken;
@@ -37,15 +38,14 @@ public class NotificationQueueProcessor {
     private final DeviceTokenRepository deviceTokenRepository;
     private final FirebaseMessagingService firebaseMessagingService;
 
-    @Autowired
     public NotificationQueueProcessor(NotificationRepository notificationRepository,
                                     DeviceTokenRepository deviceTokenRepository,
-                                    @Autowired(required = false) FirebaseMessagingService firebaseMessagingService) {
+                                    Optional<FirebaseMessagingService> firebaseMessagingService) {
         this.notificationRepository = notificationRepository;
         this.deviceTokenRepository = deviceTokenRepository;
-        this.firebaseMessagingService = firebaseMessagingService;
+        this.firebaseMessagingService = firebaseMessagingService.orElse(null);
         
-        if (firebaseMessagingService == null) {
+        if (this.firebaseMessagingService == null) {
             logger.warn("FirebaseMessagingService is not available. Notifications will be queued but not sent.");
             logger.warn("Please check Firebase configuration and ensure firebase.messaging.enabled=true");
         } else {

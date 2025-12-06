@@ -22,6 +22,13 @@ public class FirebaseConfig {
     
     private static final Logger logger = LoggerFactory.getLogger(FirebaseConfig.class);
     
+    // Constructor to verify class is being loaded
+    public FirebaseConfig() {
+        logger.info("═══════════════════════════════════════════════════════════");
+        logger.info("🔥 FirebaseConfig class is being instantiated");
+        logger.info("═══════════════════════════════════════════════════════════");
+    }
+    
     @Value("${firebase.credentials.path}")
     private String credentialsPath;
     
