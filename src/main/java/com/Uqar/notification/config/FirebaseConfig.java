@@ -38,27 +38,67 @@ public class FirebaseConfig {
             return;
         }
         
+        logger.info("Starting Firebase initialization...");
+        logger.info("Credentials path: {}", credentialsPath);
+        logger.info("Project ID: {}", projectId);
+        
         try {
             if (FirebaseApp.getApps().isEmpty()) {
                 String resourcePath = credentialsPath.replace("classpath:", "");
-                logger.info("Attempting to load Firebase credentials from: {}", resourcePath);
+                logger.info("Attempting to load Firebase credentials from classpath: {}", resourcePath);
                 
-                InputStream serviceAccount = getClass().getClassLoader()
-                    .getResourceAsStream(resourcePath);
+                // Try to load the resource
+                ClassLoader classLoader = getClass().getClassLoader();
+                InputStream serviceAccount = classLoader.getResourceAsStream(resourcePath);
                 
                 if (serviceAccount == null) {
-                    logger.error("❌ Firebase credentials file not found at: {} (resolved from: {})", 
-                        resourcePath, credentialsPath);
-                    logger.error("Please ensure the file exists at: src/main/resources/{}", resourcePath);
+                    // Try alternative paths
+                    logger.warn("Resource not found at: {}, trying alternative paths...", resourcePath);
+                    serviceAccount = classLoader.getResourceAsStream("/" + resourcePath);
+                    if (serviceAccount == null) {
+                        serviceAccount = classLoader.getResourceAsStream("firebase/serviceAccountKey.json");
+                    }
+                }
+                
+                if (serviceAccount == null) {
+                    logger.error("❌ Firebase credentials file not found at any of these paths:");
+                    logger.error("  1. {}", resourcePath);
+                    logger.error("  2. /{}", resourcePath);
+                    logger.error("  3. firebase/serviceAccountKey.json");
+                    logger.error("Please ensure the file exists in src/main/resources/firebase/serviceAccountKey.json");
+                    logger.error("And that it's included in the JAR file during build");
+                    
+                    // List available resources for debugging
+                    try {
+                        java.net.URL resourceUrl = classLoader.getResource("firebase");
+                        if (resourceUrl != null) {
+                            logger.info("Firebase directory found at: {}", resourceUrl);
+                        } else {
+                            logger.warn("Firebase directory not found in classpath");
+                        }
+                    } catch (Exception e) {
+                        logger.debug("Could not check for firebase directory: {}", e.getMessage());
+                    }
+                    
                     throw new IllegalStateException(
-                        "Firebase credentials file not found at: " + resourcePath + ". " +
-                        "Please ensure the file exists at src/main/resources/" + resourcePath
+                        "Firebase credentials file not found. " +
+                        "Expected at: " + resourcePath + " in classpath. " +
+                        "Please ensure the file exists in src/main/resources/firebase/serviceAccountKey.json " +
+                        "and is included in the JAR during Maven build."
                     );
                 }
                 
-                logger.info("Firebase credentials file found, initializing Firebase...");
+                logger.info("✅ Firebase credentials file found, reading and initializing...");
+                
+                // Read the file to verify it's valid
+                byte[] bytes = serviceAccount.readAllBytes();
+                logger.info("Credentials file size: {} bytes", bytes.length);
+                
+                // Create new InputStream from bytes for Firebase
+                java.io.ByteArrayInputStream credentialsStream = new java.io.ByteArrayInputStream(bytes);
+                
                 FirebaseOptions options = FirebaseOptions.builder()
-                    .setCredentials(GoogleCredentials.fromStream(serviceAccount))
+                    .setCredentials(GoogleCredentials.fromStream(credentialsStream))
                     .setProjectId(projectId)
                     .build();
                 
@@ -70,9 +110,15 @@ public class FirebaseConfig {
             }
         } catch (IOException e) {
             logger.error("❌ IOException while initializing Firebase: {}", e.getMessage(), e);
+            logger.error("Stack trace:", e);
             throw new IllegalStateException("Failed to initialize Firebase due to IO error: " + e.getMessage(), e);
+        } catch (IllegalArgumentException e) {
+            logger.error("❌ IllegalArgumentException while initializing Firebase: {}", e.getMessage(), e);
+            logger.error("This usually means the credentials file is invalid, corrupted, or malformed JSON");
+            throw new IllegalStateException("Failed to initialize Firebase: Invalid credentials file. " + e.getMessage(), e);
         } catch (Exception e) {
             logger.error("❌ Unexpected error initializing Firebase: {}", e.getMessage(), e);
+            logger.error("Exception type: {}", e.getClass().getName());
             throw new IllegalStateException("Failed to initialize Firebase: " + e.getMessage(), e);
         }
     }
