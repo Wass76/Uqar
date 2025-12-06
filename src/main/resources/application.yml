@@ -52,6 +52,18 @@ notifications:
 
 jwtKey: 7402bb3c24c35f15d1a7f1422078d9c1a4d9ebf1a276ff01ac84e6407625532e
 
+# Logging Configuration
+logging:
+  level:
+    # Disable Hibernate SQL logging
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+    org.hibernate.orm.jdbc.bind: WARN
+    # Keep Hibernate warnings and errors visible
+    org.hibernate: WARN
+    # Optional: Set root logging level (adjust as needed)
+    root: INFO
+
 # Pharmaceutical Import Configuration
 pharmaceutical:
   python:

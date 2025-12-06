@@ -26,8 +26,12 @@ public class FirebaseMessagingService {
     
     @Autowired
     public FirebaseMessagingService(FirebaseMessaging firebaseMessaging) {
+        if (firebaseMessaging == null) {
+            throw new IllegalStateException("FirebaseMessaging bean cannot be null. " +
+                    "This service should only be created when FirebaseMessaging bean exists.");
+        }
         this.firebaseMessaging = firebaseMessaging;
-        logger.info("FirebaseMessagingService initialized with FirebaseMessaging bean");
+        logger.info("FirebaseMessagingService initialized successfully with FirebaseMessaging bean");
     }
     
     /**
