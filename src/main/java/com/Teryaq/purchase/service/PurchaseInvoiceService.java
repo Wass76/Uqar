@@ -576,9 +576,6 @@ public class PurchaseInvoiceService extends BaseSecurityService {
             // Set pharmacy
             stockItem.setPharmacy(invoice.getPharmacy());
             
-            // Set timestamps
-            stockItem.setDateAdded(LocalDate.now());
-            stockItem.setAddedBy(getCurrentUser().getId());
             
             // Save the stock item
             stockItemRepo.save(stockItem);

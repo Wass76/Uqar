@@ -91,8 +91,8 @@ public class StockItemMapper {
                 .batchNo(stockItem.getBatchNo())
                 .actualPurchasePrice(Math.round(stockItem.getActualPurchasePrice() * 100.0) / 100.0)
                 .sellingPrice(sellingPrice != null ? Math.round(sellingPrice * 100.0f) / 100.0f : null)
-                .dateAdded(stockItem.getDateAdded())
-                .addedBy(stockItem.getCreatedBy() != null ? stockItem.getCreatedBy() : stockItem.getAddedBy())
+                .dateAdded(stockItem.getCreatedAt() != null ? stockItem.getCreatedAt().toLocalDate() : null)
+                .addedBy(stockItem.getCreatedBy())
                 .purchaseInvoiceId(stockItem.getPurchaseInvoice() != null ? 
                     stockItem.getPurchaseInvoice().getId() : null)
                 .isExpired(isExpired)
@@ -100,10 +100,12 @@ public class StockItemMapper {
                 .daysUntilExpiry(daysUntilExpiry)
                 .pharmacyId(stockItem.getPharmacy().getId())
                 .purchaseInvoiceNumber(stockItem.getPurchaseInvoice() != null ? 
-                    stockItem.getPurchaseInvoice().getInvoiceNumber() : null);
+                    stockItem.getPurchaseInvoice().getInvoiceNumber() : null)
+                .reason(stockItem.getReason() != null ? stockItem.getReason().name() : null)
+                .notes(stockItem.getNotes());
         
-        // Apply currency conversion if currency is specified
-        if (currency != null && !Currency.SYP.equals(currency)) {
+        // Apply currency conversion if currency is specified (including SYP)
+        if (currency != null) {
             applyCurrencyConversion(builder, sellingPrice, stockItem.getActualPurchasePrice(), currency);
         }
         
@@ -190,11 +192,11 @@ public class StockItemMapper {
                 .quantity(stockItem.getQuantity())
                 .actualPurchasePrice(stockItem.getActualPurchasePrice())
                 .expiryDate(stockItem.getExpiryDate())
-                .dateAdded(stockItem.getDateAdded())
+                .dateAdded(stockItem.getCreatedAt() != null ? stockItem.getCreatedAt().toLocalDate() : null)
                 .productName(getProductName(stockItem.getProductId(), stockItem.getProductType()))
                 .batchNo(stockItem.getBatchNo())
                 .bonusQty(stockItem.getBonusQty())
-                .addedBy(stockItem.getAddedBy())
+                .addedBy(stockItem.getCreatedBy())
                 .purchaseInvoiceId(stockItem.getPurchaseInvoice() != null ? stockItem.getPurchaseInvoice().getId() : null)
                 .requiresPrescription(isProductRequiresPrescription(stockItem.getProductId(), stockItem.getProductType()))
                 .build();

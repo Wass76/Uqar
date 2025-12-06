@@ -3,10 +3,13 @@ package com.Teryaq.product.controller;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -14,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.Teryaq.product.Enum.ProductType;
+import com.Teryaq.product.dto.InventoryAdjustmentRequest;
 import com.Teryaq.product.dto.StockItemDTOResponse;
 import com.Teryaq.product.dto.StockItemEditRequest;
 import com.Teryaq.product.dto.StockProductOverallDTOResponse;
@@ -181,6 +185,19 @@ public class StockManagementController {
         return ResponseEntity.ok(productDetails);
     }
 
+    @PostMapping("/adjustment/add")
+    @Operation(
+        summary = "Add stock items without purchase invoice",
+        description = "Add medicines to inventory without creating a purchase invoice. " +
+                      "Useful for inventory adjustments, physical counts, or error corrections."
+    )
+    @PreAuthorize("hasRole('PHARMACY_MANAGER') or hasRole('PHARMACY_EMPLOYEE')")
+    public ResponseEntity<StockItemDTOResponse> addStockWithoutInvoice(
+            @Valid @RequestBody InventoryAdjustmentRequest request) {
+        
+        StockItemDTOResponse result = stockService.addStockWithoutInvoice(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(result);
+    }
 
     
 } 

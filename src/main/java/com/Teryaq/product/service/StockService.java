@@ -9,23 +9,33 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.Teryaq.moneybox.service.ExchangeRateService;
 import com.Teryaq.product.Enum.ProductType;
+import com.Teryaq.product.dto.InventoryAdjustmentRequest;
 import com.Teryaq.product.dto.StockItemDTOResponse;
 import com.Teryaq.product.dto.StockItemDetailDTOResponse;
 import com.Teryaq.product.dto.StockProductOverallDTOResponse;
+import com.Teryaq.product.entity.MasterProduct;
+import com.Teryaq.product.entity.PharmacyProduct;
 import com.Teryaq.product.entity.StockItem;
 import com.Teryaq.product.mapper.StockItemMapper;
+import com.Teryaq.product.repo.MasterProductRepo;
+import com.Teryaq.product.repo.PharmacyProductRepo;
 import com.Teryaq.product.repo.StockItemRepo;
 import com.Teryaq.user.Enum.Currency;
 import com.Teryaq.user.entity.Employee;
+import com.Teryaq.user.entity.Pharmacy;
 import com.Teryaq.user.entity.User;
 import com.Teryaq.user.repository.UserRepository;
 import com.Teryaq.user.service.BaseSecurityService;
 import com.Teryaq.utils.exception.ConflictException;
+import com.Teryaq.utils.exception.ResourceNotFoundException;
 import com.Teryaq.utils.exception.UnAuthorizedException;
 
 import jakarta.persistence.EntityNotFoundException;
@@ -33,16 +43,26 @@ import jakarta.persistence.EntityNotFoundException;
 @Service
 @Transactional
 public class StockService extends BaseSecurityService {
+    private static final Logger logger = LoggerFactory.getLogger(StockService.class);
 
     private final StockItemRepo stockItemRepo;
     private final StockItemMapper stockItemMapper;
+    private final MasterProductRepo masterProductRepo;
+    private final PharmacyProductRepo pharmacyProductRepo;
+    private final ExchangeRateService exchangeRateService;
 
     public StockService(StockItemRepo stockItemRepo,
                                 @Lazy StockItemMapper stockItemMapper,
-                                UserRepository userRepository) {
+                                UserRepository userRepository,
+                                MasterProductRepo masterProductRepo,
+                                PharmacyProductRepo pharmacyProductRepo,
+                                ExchangeRateService exchangeRateService) {
         super(userRepository);
         this.stockItemRepo = stockItemRepo;
         this.stockItemMapper = stockItemMapper;
+        this.masterProductRepo = masterProductRepo;
+        this.pharmacyProductRepo = pharmacyProductRepo;
+        this.exchangeRateService = exchangeRateService;
     }
 
     public StockItemDTOResponse editStockQuantity(Long stockItemId, Integer newQuantity, 
@@ -354,6 +374,238 @@ public class StockService extends BaseSecurityService {
         
         stockItemRepo.delete(stockItem);
         return stockItemMapper.toResponse(stockItem);
+    }
+
+    /**
+     * إضافة مخزون بدون فاتورة شراء
+     * Add stock items without purchase invoice
+     */
+    @Transactional
+    public StockItemDTOResponse addStockWithoutInvoice(InventoryAdjustmentRequest request) {
+        // 1. التحقق من الصلاحيات
+        User currentUser = getCurrentUser();
+        if (!(currentUser instanceof Employee)) {
+            throw new UnAuthorizedException("Only pharmacy employees can add stock items");
+        }
+        
+        Employee employee = (Employee) currentUser;
+        if (employee.getPharmacy() == null) {
+            throw new UnAuthorizedException("Employee is not associated with any pharmacy");
+        }
+        
+        Pharmacy pharmacy = employee.getPharmacy();
+        
+        // 2. التحقق من وجود المنتج والحصول على معلوماته
+        Object product = getProductForAdjustment(request.getProductId(), request.getProductType(), pharmacy.getId());
+        
+        // 3. التحقق من تاريخ الصلاحية (إن وجد)
+        if (request.getExpiryDate() != null) {
+            validateExpiryDate(request.getExpiryDate());
+        }
+        
+        // 4. تحديد العملة (افتراضي: SYP)
+        Currency requestCurrency = request.getCurrency() != null ? request.getCurrency() : Currency.SYP;
+        
+        // 5. تحديد سعر الشراء حسب نوع المنتج (بالعملة الأصلية)
+        Double actualPurchasePrice = determinePurchasePrice(request, product);
+        
+        // 6. تحويل سعر الشراء من العملة المحددة إلى SYP قبل الحفظ
+        Double actualPurchasePriceInSYP = convertPriceToSYP(actualPurchasePrice, requestCurrency);
+        
+        if (requestCurrency != Currency.SYP) {
+            logger.info("Converted purchase price from {} {} to {} SYP for product {}", 
+                       actualPurchasePrice, requestCurrency, actualPurchasePriceInSYP, request.getProductId());
+        }
+        
+        // 7. إنشاء StockItem جديد
+        StockItem stockItem = new StockItem();
+        
+        // المعلومات الأساسية
+        stockItem.setProductId(request.getProductId());
+        stockItem.setProductType(request.getProductType());
+        stockItem.setPharmacy(pharmacy);
+        
+        // الكميات
+        int bonusQty = request.getBonusQty() != null ? request.getBonusQty() : 0;
+        int totalQuantity = request.getQuantity() + bonusQty;
+        stockItem.setQuantity(totalQuantity);
+        stockItem.setBonusQty(bonusQty);
+        
+        // الأسعار - استخدام السعر المحول إلى SYP
+        stockItem.setActualPurchasePrice(actualPurchasePriceInSYP);
+        
+        // معلومات الدفعة والصلاحية
+        stockItem.setExpiryDate(request.getExpiryDate());
+        stockItem.setBatchNo(request.getBatchNo());
+        stockItem.setInvoiceNumber(request.getInvoiceNumber());
+        
+        // الحد الأدنى للمخزون
+        if (request.getMinStockLevel() != null) {
+            stockItem.setMinStockLevel(request.getMinStockLevel());
+        }
+        
+        // ⚠️ المهم: عدم ربط بفاتورة شراء
+        stockItem.setPurchaseInvoice(null); // NULL - بدون فاتورة شراء
+        
+        // معلومات التدقيق (Audit)
+        // createdAt و createdBy يتم تعيينهما تلقائياً من AuditedEntity
+        stockItem.setReason(request.getReason());
+        stockItem.setNotes(request.getNotes());
+        
+        // 8. حفظ في قاعدة البيانات
+        StockItem savedStockItem = stockItemRepo.save(stockItem);
+        
+        // 9. تحديث معلومات المنتج (refPurchasePrice و refSellingPrice) إذا لزم الأمر
+        updateProductInformationIfNeeded(request, product, actualPurchasePriceInSYP, requestCurrency);
+        
+        // 10. إرجاع الاستجابة مع dual currency display (استخدام عملة الطلب)
+        StockItemDTOResponse response = stockItemMapper.toResponse(savedStockItem, requestCurrency);
+        response.setPharmacyId(pharmacy.getId());
+        // purchaseInvoiceNumber سيكون null لأنها ليست مرتبطة بفاتورة
+        
+        logger.info("Stock item added without invoice. StockItem ID: {}, Product ID: {}, Reason: {}", 
+                   savedStockItem.getId(), request.getProductId(), request.getReason());
+        
+        return response;
+    }
+
+    /**
+     * Method مساعد للحصول على المنتج للتحقق من وجوده
+     * Helper method to get product for validation
+     */
+    private Object getProductForAdjustment(Long productId, ProductType productType, Long pharmacyId) {
+        if (productType == ProductType.PHARMACY) {
+            return pharmacyProductRepo.findByIdAndPharmacyIdWithTranslations(productId, pharmacyId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                    "PharmacyProduct not found: " + productId + " for pharmacy: " + pharmacyId));
+        } else if (productType == ProductType.MASTER) {
+            return masterProductRepo.findById(productId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                    "MasterProduct not found: " + productId));
+        } else {
+            throw new ConflictException("Invalid productType: " + productType);
+        }
+    }
+
+    /**
+     * Method مساعد لتحديد سعر الشراء حسب نوع المنتج
+     * Helper method to determine purchase price based on product type
+     */
+    private Double determinePurchasePrice(InventoryAdjustmentRequest request, Object product) {
+        if (request.getProductType() == ProductType.MASTER) {
+            // للمنتجات MASTER: استخدام refPurchasePrice من المنتج
+            MasterProduct masterProduct = (MasterProduct) product;
+            Double refPrice = (double) masterProduct.getRefPurchasePrice();
+            
+            if (refPrice <= 0) {
+                throw new ConflictException(
+                    "MasterProduct with ID " + request.getProductId() + 
+                    " has invalid refPurchasePrice: " + refPrice);
+            }
+            
+            // تحذير إذا تم إرسال سعر مختلف في الـ request
+            if (request.getActualPurchasePrice() != null && 
+                !request.getActualPurchasePrice().equals(refPrice)) {
+                logger.warn(
+                    "Purchase price {} provided in request for MASTER product {} will be ignored. " +
+                    "Using refPurchasePrice {} from product instead.",
+                    request.getActualPurchasePrice(), request.getProductId(), refPrice);
+            }
+            
+            return refPrice;
+        } else if (request.getProductType() == ProductType.PHARMACY) {
+            // للمنتجات PHARMACY: السعر مطلوب من الـ request
+            if (request.getActualPurchasePrice() == null || request.getActualPurchasePrice() <= 0) {
+                throw new ConflictException(
+                    "Purchase price is required and must be greater than 0 for PHARMACY products");
+            }
+            return request.getActualPurchasePrice();
+        } else {
+            throw new ConflictException("Invalid productType: " + request.getProductType());
+        }
+    }
+
+    /**
+     * Method مساعد للتحقق من تاريخ الصلاحية
+     * Helper method to validate expiry date
+     */
+    private void validateExpiryDate(LocalDate expiryDate) {
+        if (expiryDate == null) {
+            return; // Optional field
+        }
+        
+        LocalDate today = LocalDate.now();
+        if (expiryDate.isBefore(today)) {
+            throw new ConflictException("Cannot add items with expired date: " + expiryDate);
+        }
+        
+        // تحذير للأدوية التي تنتهي خلال 6 أشهر
+        LocalDate sixMonthsFromNow = today.plusMonths(6);
+        if (expiryDate.isBefore(sixMonthsFromNow)) {
+            logger.warn("Item with expiry date {} is less than 6 months from now", expiryDate);
+        }
+    }
+
+    /**
+     * Method مساعد لتحديث معلومات المنتج (refPurchasePrice و refSellingPrice)
+     * Helper method to update product information if needed
+     */
+    private void updateProductInformationIfNeeded(InventoryAdjustmentRequest request, Object product, Double actualPurchasePriceInSYP, Currency requestCurrency) {
+        if (request.getProductType() == ProductType.PHARMACY) {
+            updatePharmacyProductInformation(request, (PharmacyProduct) product, actualPurchasePriceInSYP, requestCurrency);
+        }
+        // للمنتجات MASTER: لا يتم تحديث refPurchasePrice (لأنه ثابت)
+        // ولا يتم تحديث refSellingPrice (لأنه ثابت أيضاً)
+    }
+
+    /**
+     * Method مساعد لتحديث معلومات المنتج PHARMACY
+     * Helper method to update PharmacyProduct information
+     */
+    private void updatePharmacyProductInformation(InventoryAdjustmentRequest request, PharmacyProduct product, Double actualPurchasePriceInSYP, Currency requestCurrency) {
+        boolean updated = false;
+        
+        // تحديث refPurchasePrice إذا كان مختلفاً (بالـ SYP)
+        if (actualPurchasePriceInSYP != null && !actualPurchasePriceInSYP.equals((double) product.getRefPurchasePrice())) {
+            product.setRefPurchasePrice(actualPurchasePriceInSYP.floatValue());
+            updated = true;
+            logger.info("Updated refPurchasePrice for PharmacyProduct {} from {} to {} SYP", 
+                       product.getId(), product.getRefPurchasePrice(), actualPurchasePriceInSYP);
+        }
+        
+        // تحديث refSellingPrice إذا تم إرساله في الـ request
+        if (request.getSellingPrice() != null && request.getSellingPrice() > 0) {
+            // تحويل سعر البيع من العملة المحددة إلى SYP قبل الحفظ
+            Double sellingPriceInSYP = convertPriceToSYP(request.getSellingPrice(), requestCurrency);
+            
+            if (!sellingPriceInSYP.equals((double) product.getRefSellingPrice())) {
+                product.setRefSellingPrice(sellingPriceInSYP.floatValue());
+                updated = true;
+                logger.info("Updated refSellingPrice for PharmacyProduct {} from {} to {} SYP (converted from {} {})", 
+                           product.getId(), product.getRefSellingPrice(), sellingPriceInSYP, 
+                           request.getSellingPrice(), requestCurrency);
+            }
+        }
+        
+        // حفظ المنتج إذا تم تحديث أي حقل
+        if (updated) {
+            pharmacyProductRepo.save(product);
+        }
+    }
+
+    /**
+     * Method مساعد لتحويل السعر من العملة المحددة إلى SYP
+     * Helper method to convert price from specified currency to SYP
+     */
+    private Double convertPriceToSYP(Double price, Currency fromCurrency) {
+        if (fromCurrency == null || fromCurrency == Currency.SYP) {
+            return price; // السعر بالفعل بـ SYP
+        }
+        
+        java.math.BigDecimal priceBigDecimal = java.math.BigDecimal.valueOf(price);
+        java.math.BigDecimal priceInSYP = exchangeRateService.convertToSYP(priceBigDecimal, fromCurrency);
+        
+        return priceInSYP.doubleValue();
     }
 
 } 

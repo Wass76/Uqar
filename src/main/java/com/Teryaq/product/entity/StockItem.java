@@ -1,15 +1,25 @@
 package com.Teryaq.product.entity;
 
+import java.time.LocalDate;
+
+import com.Teryaq.product.Enum.InventoryAdjustmentReason;
 import com.Teryaq.product.Enum.ProductType;
 import com.Teryaq.purchase.entity.PurchaseInvoice;
 import com.Teryaq.user.entity.Pharmacy;
 import com.Teryaq.utils.entity.AuditedEntity;
-import jakarta.persistence.*;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-import java.time.LocalDate;
 
 @EqualsAndHashCode(callSuper = true)
 @Data
@@ -55,15 +65,16 @@ public class StockItem extends AuditedEntity {
     @JoinColumn(name = "purchase_invoice_id")
     private PurchaseInvoice purchaseInvoice;
 
-    @Column
-    private LocalDate dateAdded;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "pharmacy_id", nullable = false)
     private Pharmacy pharmacy;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reason", length = 50)
+    private InventoryAdjustmentReason reason; // سبب الإضافة (للتعديلات بدون فاتورة)
 
-    @Column
-    private Long addedBy;
+    @Column(length = 2000)
+    private String notes; // ملاحظات إضافية 
 
     @Override
     protected String getSequenceName() {
