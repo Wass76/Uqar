@@ -47,21 +47,49 @@ public class FirebaseMessagingService {
     public FirebaseMessagingService(FirebaseMessaging firebaseMessaging,
                                    RateLimiterRegistry rateLimiterRegistry,
                                    MeterRegistry meterRegistry) {
-        if (firebaseMessaging == null) {
-            throw new IllegalStateException("FirebaseMessaging bean cannot be null. " +
-                    "This service should only be created when FirebaseMessaging bean exists.");
-        }
-        this.firebaseMessaging = firebaseMessaging;
-        this.meterRegistry = meterRegistry;
+        logger.info("═══════════════════════════════════════════════════════════");
+        logger.info("🔥 FirebaseMessagingService constructor called");
+        logger.info("═══════════════════════════════════════════════════════════");
         
-        // Initialize rate limiter for Firebase (900 requests per minute to stay under 1000/sec limit)
-        this.firebaseRateLimiter = rateLimiterRegistry.rateLimiter("firebase", () -> 
-            io.github.resilience4j.ratelimiter.RateLimiterConfig.custom()
-                .limitForPeriod(900) // 900 requests per period
-                .limitRefreshPeriod(java.time.Duration.ofMinutes(1))
-                .timeoutDuration(java.time.Duration.ofSeconds(5))
-                .build()
-        );
+        try {
+            if (firebaseMessaging == null) {
+                logger.error("❌ FirebaseMessaging bean is null!");
+                throw new IllegalStateException("FirebaseMessaging bean cannot be null. " +
+                        "This service should only be created when FirebaseMessaging bean exists.");
+            }
+            
+            if (rateLimiterRegistry == null) {
+                logger.error("❌ RateLimiterRegistry is null!");
+                throw new IllegalStateException("RateLimiterRegistry cannot be null");
+            }
+            
+            if (meterRegistry == null) {
+                logger.error("❌ MeterRegistry is null!");
+                throw new IllegalStateException("MeterRegistry cannot be null");
+            }
+            
+            logger.info("✅ All dependencies available:");
+            logger.info("   - FirebaseMessaging: {}", firebaseMessaging.getClass().getName());
+            logger.info("   - RateLimiterRegistry: {}", rateLimiterRegistry.getClass().getName());
+            logger.info("   - MeterRegistry: {}", meterRegistry.getClass().getName());
+            
+            this.firebaseMessaging = firebaseMessaging;
+            this.meterRegistry = meterRegistry;
+            
+            // Initialize rate limiter for Firebase (900 requests per minute to stay under 1000/sec limit)
+            try {
+                this.firebaseRateLimiter = rateLimiterRegistry.rateLimiter("firebase", () -> 
+                    io.github.resilience4j.ratelimiter.RateLimiterConfig.custom()
+                        .limitForPeriod(900) // 900 requests per period
+                        .limitRefreshPeriod(java.time.Duration.ofMinutes(1))
+                        .timeoutDuration(java.time.Duration.ofSeconds(5))
+                        .build()
+                );
+                logger.info("✅ Rate limiter initialized");
+            } catch (Exception e) {
+                logger.error("❌ Error initializing rate limiter: {}", e.getMessage(), e);
+                throw e;
+            }
         
         // Initialize metrics
         this.notificationsSentSuccess = Counter.builder("firebase.notifications.sent")
@@ -84,11 +112,26 @@ public class FirebaseMessagingService {
             .description("Number of notifications failed due to Firebase unavailability")
             .register(meterRegistry);
         
-        this.notificationSendDuration = Timer.builder("firebase.notifications.duration")
-            .description("Time taken to send Firebase notifications")
-            .register(meterRegistry);
+            this.notificationSendDuration = Timer.builder("firebase.notifications.duration")
+                .description("Time taken to send Firebase notifications")
+                .register(meterRegistry);
+            
+            logger.info("✅ All metrics initialized");
+            
+        } catch (Exception e) {
+            logger.error("═══════════════════════════════════════════════════════════");
+            logger.error("❌ CRITICAL: Error initializing FirebaseMessagingService");
+            logger.error("═══════════════════════════════════════════════════════════");
+            logger.error("Error: {}", e.getMessage(), e);
+            throw e;
+        }
         
-        logger.info("FirebaseMessagingService initialized successfully with FirebaseMessaging bean, rate limiter, and metrics");
+        logger.info("═══════════════════════════════════════════════════════════");
+        logger.info("✅ FirebaseMessagingService initialized successfully");
+        logger.info("   - FirebaseMessaging: Available");
+        logger.info("   - RateLimiter: Available");
+        logger.info("   - MeterRegistry: Available");
+        logger.info("═══════════════════════════════════════════════════════════");
     }
     
     /**
