@@ -16,6 +16,8 @@ services:
     networks:
       - uqar-net
     restart: unless-stopped
+    # CRITICAL: Increase shared memory size to prevent PostgreSQL crashes
+    shm_size: 256mb
     # Resource limits to prevent CPU thrashing and memory issues
     deploy:
       resources:

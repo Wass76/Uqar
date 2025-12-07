@@ -10,7 +10,7 @@ spring:
   application:
     name: Uqar
   datasource:
-    url: jdbc:postgresql://localhost:5432/teryaq
+    url: jdbc:postgresql://localhost:5432/uqar
     username: postgres
     password: password
     driver-class-name: org.postgresql.Driver
@@ -33,6 +33,7 @@ spring:
     properties:
 #      format_sql: true
       hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
         globally_quoted_identifiers: true
         globally_quoted_identifiers_skip_column_definitions: true
         enable_lazy_load_no_trans: true
@@ -53,16 +54,16 @@ notifications:
 jwtKey: 7402bb3c24c35f15d1a7f1422078d9c1a4d9ebf1a276ff01ac84e6407625532e
 
 # Logging Configuration
-logging:
-  level:
-    # Disable Hibernate SQL logging
-    org.hibernate.SQL: WARN
-    org.hibernate.type.descriptor.sql.BasicBinder: WARN
-    org.hibernate.orm.jdbc.bind: WARN
-    # Keep Hibernate warnings and errors visible
-    org.hibernate: WARN
-    # Optional: Set root logging level (adjust as needed)
-    root: INFO
+#logging:
+#  level:
+#    # Disable Hibernate SQL logging
+#    org.hibernate.SQL: WARN
+#    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+#    org.hibernate.orm.jdbc.bind: WARN
+#    # Keep Hibernate warnings and errors visible
+#    org.hibernate: WARN
+#    # Optional: Set root logging level (adjust as needed)
+#    root: INFO
 
 # Pharmaceutical Import Configuration
 pharmaceutical:

@@ -9,7 +9,7 @@ target/
 .vscode/
 .settings/
 .project
-.classpath
+#.classpath
 
 # OS files
 .DS_Store
