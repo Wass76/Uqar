@@ -25,7 +25,7 @@ FROM eclipse-temurin:21-jdk
 WORKDIR /app
 
 # Copy the built Spring Boot JAR from the build stage
-COPY --from=build /app/target/Teryaq-0.0.1-SNAPSHOT.jar /app/uqar.jar
+COPY --from=build /app/target/Uqar-0.0.1-SNAPSHOT.jar /app/uqar.jar
 
 # Expose the port your Spring Boot application listens on (3000)
 EXPOSE 3000

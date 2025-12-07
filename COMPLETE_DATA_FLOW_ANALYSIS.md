@@ -1,4 +1,4 @@
-# 🔄 Complete Data Flow Analysis - Teryaq Pharmacy System
+# 🔄 Complete Data Flow Analysis - Uqar Pharmacy System
 
 ## 📋 **1. Purchase Order Creation Flow**
 

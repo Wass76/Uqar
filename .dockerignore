@@ -1,7 +1,7 @@
 # Maven
 target/
 !target/*.jar
-!target/Teryaq-0.0.1-SNAPSHOT.jar
+!target/Uqar-0.0.1-SNAPSHOT.jar
 
 # IDE files
 .idea/
@@ -9,7 +9,7 @@ target/
 .vscode/
 .settings/
 .project
-.classpath
+#.classpath
 
 # OS files
 .DS_Store

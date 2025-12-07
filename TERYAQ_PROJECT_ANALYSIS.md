@@ -1,8 +1,8 @@
-# Teryaq Pharmacy Management System - Comprehensive Analysis
+# Uqar Pharmacy Management System - Comprehensive Analysis
 
 ## 📋 **Executive Summary**
 
-**Teryaq** is a comprehensive **Pharmacy Management System** designed specifically for Middle Eastern pharmacy operations, with a focus on Arabic language support and local business practices. The system provides a complete solution for managing pharmacy operations including inventory management, sales, purchases, customer management, user administration, and **MoneyBox management**.
+**Uqar** is a comprehensive **Pharmacy Management System** designed specifically for Middle Eastern pharmacy operations, with a focus on Arabic language support and local business practices. The system provides a complete solution for managing pharmacy operations including inventory management, sales, purchases, customer management, user administration, and **MoneyBox management**.
 
 **Key Strengths:**
 - ✅ **Comprehensive Coverage**: All major pharmacy operations
@@ -661,7 +661,7 @@ Based on the analysis of the codebase and understanding of Syrian pharmacy daily
 
 ## 🎉 **Conclusion**
 
-The Teryaq project represents a **comprehensive, enterprise-grade pharmacy management system** designed specifically for Middle Eastern pharmacy operations. With its robust architecture, comprehensive feature set, and strong technical foundation, it provides a solid platform for managing complex pharmacy operations while maintaining security, performance, and scalability.
+The Uqar project represents a **comprehensive, enterprise-grade pharmacy management system** designed specifically for Middle Eastern pharmacy operations. With its robust architecture, comprehensive feature set, and strong technical foundation, it provides a solid platform for managing complex pharmacy operations while maintaining security, performance, and scalability.
 
 ### **Key Strengths:**
 - **Comprehensive Coverage**: All major pharmacy operations
@@ -686,7 +686,7 @@ The system is **production-ready with comprehensive daily operational features**
 The system is **production-ready for complete pharmacy operations** and can effectively replace manual processes in Syrian pharmacy environments. The MoneyBox management feature provides the critical daily cash control that was previously missing.
 
 ### **Future Potential:**
-With the implementation of the remaining features (employee time tracking, inventory adjustments, customer credit limits), Teryaq has the potential to become the **leading pharmacy management system** in the Middle East, providing comprehensive support for both small independent pharmacies and large pharmacy chains.
+With the implementation of the remaining features (employee time tracking, inventory adjustments, customer credit limits), Uqar has the potential to become the **leading pharmacy management system** in the Middle East, providing comprehensive support for both small independent pharmacies and large pharmacy chains.
 
 ---
 

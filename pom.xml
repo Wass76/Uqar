@@ -9,14 +9,14 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com</groupId>
-	<artifactId>Teryaq</artifactId>
+	<artifactId>Uqar</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>Teryaq</name>
-	<description>Tires Management System is a system to manage tires replacements for dealers</description>
-	<properties>
-		<java.version>21</java.version>
-		<org.mapstruct.version>1.6.2</org.mapstruct.version>
-	</properties>
+	<name>Uqar</name>
+	<description>Uqar is a SaaS solutions for Pharmacies management system in Syria</description>
+<!--	<properties>-->
+<!--		<java.version>21</java.version>-->
+<!--		<org.mapstruct.version>1.6.2</org.mapstruct.version>-->
+<!--	</properties>-->
 	<dependencies>
 
 <!--		Data JPA service-->
@@ -64,17 +64,17 @@
 		</dependency>
 
 		<!--		Mapper tool-->
-		<dependency>
-			<groupId>org.mapstruct</groupId>
-			<artifactId>mapstruct</artifactId>
-			<version>1.5.5.Final</version>
-		</dependency>
+<!--		<dependency>-->
+<!--			<groupId>org.mapstruct</groupId>-->
+<!--			<artifactId>mapstruct</artifactId>-->
+<!--			<version>1.5.5.Final</version>-->
+<!--		</dependency>-->
 
-		<dependency>
-			<groupId>org.mapstruct</groupId>
-			<artifactId>mapstruct-processor</artifactId>
-			<version>1.5.5.Final</version>
-		</dependency>
+<!--		<dependency>-->
+<!--			<groupId>org.mapstruct</groupId>-->
+<!--			<artifactId>mapstruct-processor</artifactId>-->
+<!--			<version>1.5.5.Final</version>-->
+<!--		</dependency>-->
 
 		<dependency>
 			<groupId>org.postgresql</groupId>
@@ -195,7 +195,7 @@
 				<artifactId>flyway-maven-plugin</artifactId>
 				<version>9.22.3</version>
 				<configuration>
-					<url>jdbc:postgresql://localhost:5432/teryaq</url>
+					<url>jdbc:postgresql://localhost:5432/uqar</url>
 					<user>postgres</user>
 					<password>password</password>
 				</configuration>

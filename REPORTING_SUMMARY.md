@@ -58,7 +58,7 @@ GET /api/v1/pharmacy/reports/employees/performance-summary
 
 ## 📁 **Module Structure**
 ```
-src/main/java/com/Teryaq/reports/
+src/main/java/com/Uqar/reports/
 ├── controller/     # AdminReportController, PharmacyReportController
 ├── service/       # Report services & calculations
 ├── dto/           # Request/Response objects

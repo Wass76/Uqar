@@ -1,6 +1,6 @@
-# API Request Bodies Guide - Teryaq Pharmacy System
+# API Request Bodies Guide - Uqar Pharmacy System
 
-This guide provides comprehensive examples of request bodies for creating purchase orders, purchase invoices, sales invoices, and managing employees in the Teryaq pharmacy management system.
+This guide provides comprehensive examples of request bodies for creating purchase orders, purchase invoices, sales invoices, and managing employees in the Uqar pharmacy management system.
 
 ---
 

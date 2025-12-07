@@ -8,13 +8,28 @@ spring:
         exposure:
           include=*:
   application:
-    name: Teryaq
+    name: Uqar
   datasource:
-    url: jdbc:postgresql://localhost:5432/teryaq
+    url: jdbc:postgresql://localhost:5432/uqar
     username: postgres
     password: password
     driver-class-name: org.postgresql.Driver
-    name: teryaq
+    name: uqar
+    hikari:
+      # Connection pool settings for Docker/network resilience
+      minimum-idle: 5
+      maximum-pool-size: 20
+      connection-timeout: 30000 # 30 seconds
+      idle-timeout: 600000 # 10 minutes
+      max-lifetime: 1800000 # 30 minutes
+      leak-detection-threshold: 60000 # 1 minute
+      # Connection validation
+      connection-test-query: SELECT 1
+      validation-timeout: 5000 # 5 seconds
+      # Keep connections alive
+      keepalive-time: 300000 # 5 minutes - send keepalive to prevent connection reset
+      # Network resilience
+      register-mbeans: true
   flyway:
     enabled: false
     locations: classpath:/db/migration # This is the default path Flyway looks in
@@ -31,19 +46,24 @@ spring:
     defer-datasource-initialization: false
     open-in-view: true
     properties:
-      format_sql: true
+#      format_sql: true
       hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
         globally_quoted_identifiers: true
         globally_quoted_identifiers_skip_column_definitions: true
         enable_lazy_load_no_trans: true
-    show-sql: true
+#    show-sql: true
 
 firebase:
   credentials:
-    path: classpath:firebase/serviceAccountKey.json
-  project-id: uqar-project-7c843
+    # Supports environment variable: FIREBASE_CREDENTIALS_PATH
+    # Can be: classpath:firebase/serviceAccountKey.json (default)
+    # Or: /app/firebase/serviceAccountKey.json (file system path)
+    # Or: ${FIREBASE_CREDENTIALS_PATH:classpath:firebase/serviceAccountKey.json}
+    path: ${FIREBASE_CREDENTIALS_PATH:classpath:firebase/serviceAccountKey.json}
+  project-id: ${FIREBASE_PROJECT_ID:uqar-project-7c843}
   messaging:
-    enabled: true
+    enabled: ${FIREBASE_MESSAGING_ENABLED:true}
 
 notifications:
   purchase:
@@ -51,6 +71,18 @@ notifications:
 
 
 jwtKey: 7402bb3c24c35f15d1a7f1422078d9c1a4d9ebf1a276ff01ac84e6407625532e
+
+# Logging Configuration
+#logging:
+#  level:
+#    # Disable Hibernate SQL logging
+#    org.hibernate.SQL: WARN
+#    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+#    org.hibernate.orm.jdbc.bind: WARN
+#    # Keep Hibernate warnings and errors visible
+#    org.hibernate: WARN
+#    # Optional: Set root logging level (adjust as needed)
+#    root: INFO
 
 # Pharmaceutical Import Configuration
 pharmaceutical:

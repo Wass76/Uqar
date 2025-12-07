@@ -1,6 +1,6 @@
 # Pharmaceutical Data Import System
 
-This system allows importing pharmaceutical data from Excel files into the Teryaq database using a Python script integrated with Spring Boot.
+This system allows importing pharmaceutical data from Excel files into the Uqar database using a Python script integrated with Spring Boot.
 
 ## Overview
 
@@ -17,7 +17,7 @@ scripts/
 ├── extract_for_spring_boot.py    # Main Python extraction script
 └── test_extract.py              # Test script for validation
 
-src/main/java/com/Teryaq/product/
+src/main/java/com/Uqar/product/
 ├── controller/
 │   └── PharmaceuticalController.java    # REST endpoints
 ├── service/
