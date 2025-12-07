@@ -15,9 +15,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -25,8 +22,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-@Service
-@ConditionalOnBean(FirebaseMessaging.class)
 public class FirebaseMessagingService {
     
     private static final Logger logger = LoggerFactory.getLogger(FirebaseMessagingService.class);
@@ -43,7 +38,6 @@ public class FirebaseMessagingService {
     private final Counter notificationsSentUnavailable;
     private final Timer notificationSendDuration;
     
-    @Autowired
     public FirebaseMessagingService(FirebaseMessaging firebaseMessaging,
                                    RateLimiterRegistry rateLimiterRegistry,
                                    MeterRegistry meterRegistry) {

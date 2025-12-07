@@ -16,6 +16,9 @@ import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import com.google.firebase.messaging.FirebaseMessaging;
+import com.Uqar.notification.service.FirebaseMessagingService;
+import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
 
 import jakarta.annotation.PostConstruct;
 
@@ -293,6 +296,36 @@ public class FirebaseConfig {
             logger.error("═══════════════════════════════════════════════════════════");
             logger.warn("Application will continue without Firebase notifications");
             return null;
+        }
+    }
+    
+    /**
+     * Creates FirebaseMessagingService bean.
+     * This service is only created when FirebaseMessaging bean exists.
+     * Created as @Bean method to ensure proper creation order.
+     */
+    @Bean
+    @ConditionalOnProperty(name = "firebase.messaging.enabled", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnBean(FirebaseMessaging.class)
+    public FirebaseMessagingService firebaseMessagingService(
+            FirebaseMessaging firebaseMessaging,
+            RateLimiterRegistry rateLimiterRegistry,
+            MeterRegistry meterRegistry) {
+        logger.info("═══════════════════════════════════════════════════════════");
+        logger.info("🔥 Creating FirebaseMessagingService bean");
+        logger.info("═══════════════════════════════════════════════════════════");
+        
+        try {
+            FirebaseMessagingService service = new FirebaseMessagingService(
+                firebaseMessaging,
+                rateLimiterRegistry,
+                meterRegistry
+            );
+            logger.info("✅ FirebaseMessagingService bean created successfully");
+            return service;
+        } catch (Exception e) {
+            logger.error("❌ Error creating FirebaseMessagingService bean: {}", e.getMessage(), e);
+            throw new IllegalStateException("Failed to create FirebaseMessagingService", e);
         }
     }
 }
