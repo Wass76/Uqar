@@ -1,5 +1,8 @@
 package com.Uqar.product.entity;
 
+import java.time.LocalDate;
+
+import com.Uqar.product.Enum.InventoryAdjustmentReason;
 import com.Uqar.product.Enum.ProductType;
 import com.Uqar.purchase.entity.PurchaseInvoice;
 import com.Uqar.user.entity.Pharmacy;
@@ -9,7 +12,6 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-import java.time.LocalDate;
 
 @EqualsAndHashCode(callSuper = true)
 @Data
@@ -55,15 +57,16 @@ public class StockItem extends AuditedEntity {
     @JoinColumn(name = "purchase_invoice_id")
     private PurchaseInvoice purchaseInvoice;
 
-    @Column
-    private LocalDate dateAdded;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "pharmacy_id", nullable = false)
     private Pharmacy pharmacy;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reason", length = 50)
+    private InventoryAdjustmentReason reason; // سبب الإضافة (للتعديلات بدون فاتورة)
 
-    @Column
-    private Long addedBy;
+    @Column(length = 2000)
+    private String notes; // ملاحظات إضافية 
 
     @Override
     protected String getSequenceName() {

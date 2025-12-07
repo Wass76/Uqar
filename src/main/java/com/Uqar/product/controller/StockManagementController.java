@@ -3,10 +3,13 @@ package com.Uqar.product.controller;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,6 +23,7 @@ import com.Uqar.product.dto.StockProductOverallDTOResponse;
 import com.Uqar.product.service.CurrencyConversionService;
 import com.Uqar.product.service.StockService;
 import com.Uqar.user.Enum.Currency;
+import com.Uqar.product.dto.InventoryAdjustmentRequest;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -181,6 +185,19 @@ public class StockManagementController {
         return ResponseEntity.ok(productDetails);
     }
 
+    @PostMapping("/adjustment/add")
+    @Operation(
+        summary = "Add stock items without purchase invoice",
+        description = "Add medicines to inventory without creating a purchase invoice. " +
+                      "Useful for inventory adjustments, physical counts, or error corrections."
+    )
+    @PreAuthorize("hasRole('PHARMACY_MANAGER') or hasRole('PHARMACY_EMPLOYEE')")
+    public ResponseEntity<StockItemDTOResponse> addStockWithoutInvoice(
+            @Valid @RequestBody InventoryAdjustmentRequest request) {
+        
+        StockItemDTOResponse result = stockService.addStockWithoutInvoice(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(result);
+    }
 
     
 } 

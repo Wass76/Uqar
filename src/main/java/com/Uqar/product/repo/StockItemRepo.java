@@ -34,7 +34,7 @@ public interface StockItemRepo extends JpaRepository<StockItem, Long> {
     @Query("SELECT s FROM StockItem s WHERE s.expiryDate > :startDate AND s.expiryDate <= :endDate AND s.pharmacy.id = :pharmacyId AND s.quantity > 0")
     List<StockItem> findItemsExpiringSoon(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate, @Param("pharmacyId") Long pharmacyId);
     
-    @Query("SELECT s FROM StockItem s WHERE s.productId = :productId AND s.pharmacy.id = :pharmacyId AND s.quantity > :minQuantity AND s.expiryDate > :date ORDER BY s.dateAdded ASC")
+    @Query("SELECT s FROM StockItem s WHERE s.productId = :productId AND s.pharmacy.id = :pharmacyId AND s.quantity > :minQuantity AND s.expiryDate > :date ORDER BY s.createdAt ASC")
     List<StockItem> findByProductIdAndQuantity(
         @Param("productId") Long productId, 
         @Param("pharmacyId") Long pharmacyId, 
@@ -117,7 +117,7 @@ public interface StockItemRepo extends JpaRepository<StockItem, Long> {
     @Query("SELECT COUNT(si) > 0 FROM StockItem si WHERE si.productId = :productId AND si.productType = :productType")
     Boolean existsByProductIdAndProductType(@Param("productId") Long productId, @Param("productType") ProductType productType);
     
-    @Query("SELECT si FROM StockItem si WHERE si.productId = :productId AND si.productType = :productType ORDER BY si.dateAdded DESC")
+    @Query("SELECT si FROM StockItem si WHERE si.productId = :productId AND si.productType = :productType ORDER BY si.createdAt DESC")
     List<StockItem> findByProductIdAndProductTypeOrderByDateAddedDesc(@Param("productId") Long productId, @Param("productType") ProductType productType);
 }
             
