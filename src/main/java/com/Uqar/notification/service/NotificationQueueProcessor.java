@@ -5,6 +5,9 @@ import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -56,47 +59,138 @@ public class NotificationQueueProcessor {
     /**
      * Processes pending notifications every 5 seconds.
      * Fixed delay ensures we don't overwhelm the system.
+     * Note: @Transactional removed to avoid long-running transactions.
+     * Each notification is processed in its own transaction.
+     * Includes retry logic for transient database connection errors.
      */
     @Scheduled(fixedDelay = 5000) // 5 seconds
-    @Transactional
     public void processPendingNotifications() {
-        try {
-            LocalDateTime now = LocalDateTime.now();
-            Pageable pageable = PageRequest.of(0, BATCH_SIZE);
-            
-            // Get notifications that are ready for retry (next_retry_at <= now or null)
-            List<Notification> readyNotifications = notificationRepository
-                .findReadyForRetry("PENDING", now, pageable)
-                .getContent();
-
-            if (readyNotifications.isEmpty()) {
-                return; // No notifications ready for processing
-            }
-
-            logger.debug("Processing {} notifications ready for retry", readyNotifications.size());
-
-            for (Notification notification : readyNotifications) {
+        int maxRetries = 3;
+        int retryCount = 0;
+        
+        while (retryCount < maxRetries) {
+            try {
+                LocalDateTime now = LocalDateTime.now();
+                Pageable pageable = PageRequest.of(0, BATCH_SIZE);
+                
+                // Get notifications that are ready for retry (next_retry_at <= now or null)
+                // Wrap in try-catch to handle connection errors gracefully
+                Page<Notification> notificationPage;
                 try {
-                    // Skip if next_retry_at is in the future
-                    if (notification.getNextRetryAt() != null && notification.getNextRetryAt().isAfter(now)) {
-                        continue;
+                    notificationPage = notificationRepository.findReadyForRetry("PENDING", now, pageable);
+                } catch (DataAccessException e) {
+                    // Database connection error - retry with exponential backoff
+                    if (isTransientDatabaseError(e)) {
+                        retryCount++;
+                        if (retryCount < maxRetries) {
+                            long delayMs = (long) Math.pow(2, retryCount) * 1000; // Exponential backoff: 2s, 4s, 8s
+                            logger.warn("Database connection error (attempt {}/{}). Retrying in {}ms: {}", 
+                                retryCount, maxRetries, delayMs, e.getMessage());
+                            Thread.sleep(delayMs);
+                            continue;
+                        } else {
+                            logger.error("Database connection failed after {} attempts. Skipping this cycle.", maxRetries);
+                            return;
+                        }
+                    } else {
+                        // Non-transient error, don't retry
+                        logger.error("Non-transient database error in processPendingNotifications: {}", e.getMessage());
+                        return;
                     }
-                    processNotification(notification);
-                } catch (Exception e) {
-                    logger.error("Error processing notification {}: {}", 
-                        notification.getId(), e.getMessage(), e);
-                    handleNotificationFailure(notification);
                 }
+                
+                List<Notification> readyNotifications = notificationPage.getContent();
+
+                if (readyNotifications.isEmpty()) {
+                    return; // No notifications ready for processing
+                }
+
+                logger.debug("Processing {} notifications ready for retry", readyNotifications.size());
+
+                for (Notification notification : readyNotifications) {
+                    try {
+                        // Skip if next_retry_at is in the future
+                        if (notification.getNextRetryAt() != null && notification.getNextRetryAt().isAfter(now)) {
+                            continue;
+                        }
+                        // Process each notification in its own transaction
+                        processNotificationInTransaction(notification);
+                    } catch (DataAccessException e) {
+                        // Database connection error during processing
+                        if (isTransientDatabaseError(e)) {
+                            logger.warn("Database connection error while processing notification {}. Will retry in next cycle: {}", 
+                                notification.getId(), e.getMessage());
+                            // Don't mark as failed - let it retry in next cycle
+                        } else {
+                            logger.error("Error processing notification {}: {}", 
+                                notification.getId(), e.getMessage(), e);
+                            try {
+                                handleNotificationFailureInTransaction(notification);
+                            } catch (Exception ex) {
+                                logger.error("Failed to handle notification failure for {}: {}", 
+                                    notification.getId(), ex.getMessage());
+                            }
+                        }
+                    } catch (Exception e) {
+                        logger.error("Error processing notification {}: {}", 
+                            notification.getId(), e.getMessage(), e);
+                        try {
+                            handleNotificationFailureInTransaction(notification);
+                        } catch (Exception ex) {
+                            logger.error("Failed to handle notification failure for {}: {}", 
+                                notification.getId(), ex.getMessage());
+                        }
+                    }
+                }
+                
+                // Success - break out of retry loop
+                break;
+                
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                logger.error("Notification processing interrupted", e);
+                return;
+            } catch (Exception e) {
+                logger.error("Unexpected error in processPendingNotifications: {}", e.getMessage(), e);
+                // Don't retry for unexpected errors
+                return;
             }
-        } catch (Exception e) {
-            logger.error("Error in processPendingNotifications: {}", e.getMessage(), e);
         }
+    }
+    
+    /**
+     * Checks if the database error is transient (can be retried).
+     * Transient errors include connection resets, timeouts, and network issues.
+     */
+    private boolean isTransientDatabaseError(Exception e) {
+        if (e == null) {
+            return false;
+        }
+        
+        String message = e.getMessage();
+        if (message == null) {
+            message = "";
+        }
+        
+        // Check for transient error patterns
+        return message.contains("Connection reset") ||
+               message.contains("Connection is closed") ||
+               message.contains("I/O error") ||
+               message.contains("An I/O error occurred") ||
+               message.contains("Connection timed out") ||
+               message.contains("SocketException") ||
+               message.contains("SQLSTATE(08006)") ||
+               message.contains("SQLSTATE(08P01)") ||
+               (e.getCause() != null && e.getCause().getClass().getSimpleName().contains("SocketException"));
     }
 
     /**
      * Processes a single notification by sending it via FCM.
+     * Each notification is processed in its own transaction to avoid long-running transactions.
+     * Includes error handling for database connection issues.
      */
-    private void processNotification(Notification notification) {
+    @Transactional(noRollbackFor = {DataAccessResourceFailureException.class})
+    private void processNotificationInTransaction(Notification notification) {
         // Check retry count
         if (notification.getRetryCount() != null && notification.getRetryCount() >= MAX_RETRY_COUNT) {
             notification.setStatus("FAILED");
@@ -143,7 +237,7 @@ public class NotificationQueueProcessor {
         // Check if FirebaseMessagingService is available
         if (firebaseMessagingService == null) {
             logger.error("FirebaseMessagingService is not available. Cannot send notification {}.", notification.getId());
-            handleNotificationFailure(notification);
+            handleNotificationFailureInTransaction(notification);
             return;
         }
         
@@ -222,8 +316,11 @@ public class NotificationQueueProcessor {
 
     /**
      * Handles notification processing failure.
+     * Each failure is handled in its own transaction.
+     * Includes error handling for database connection issues.
      */
-    private void handleNotificationFailure(Notification notification) {
+    @Transactional(noRollbackFor = {DataAccessResourceFailureException.class})
+    private void handleNotificationFailureInTransaction(Notification notification) {
         int currentRetryCount = notification.getRetryCount() != null ? notification.getRetryCount() : 0;
         int newRetryCount = currentRetryCount + 1;
         

@@ -29,14 +29,17 @@ public class FirebaseConfig {
         logger.info("═══════════════════════════════════════════════════════════");
     }
     
-    @Value("${firebase.credentials.path}")
+    @Value("${firebase.credentials.path:classpath:firebase/serviceAccountKey.json}")
     private String credentialsPath;
     
-    @Value("${firebase.project-id}")
+    @Value("${firebase.project-id:}")
     private String projectId;
     
     @Value("${firebase.messaging.enabled:true}")
     private boolean messagingEnabled;
+    
+    // Track initialization status
+    private static boolean initializationFailed = false;
     
     @PostConstruct
     public void initialize() {
@@ -49,81 +52,98 @@ public class FirebaseConfig {
         
         if (!messagingEnabled) {
             logger.info("Firebase Messaging is disabled via configuration");
+            logger.info("Application will continue without Firebase notifications");
             logger.info("═══════════════════════════════════════════════════════════");
+            initializationFailed = false; // Not a failure, just disabled
             return;
         }
         
         try {
             if (FirebaseApp.getApps().isEmpty()) {
-                String resourcePath = credentialsPath.replace("classpath:", "");
-                logger.info("Attempting to load Firebase credentials from classpath: {}", resourcePath);
+                InputStream serviceAccount = null;
                 
-                // Try to load the resource
-                ClassLoader classLoader = getClass().getClassLoader();
-                logger.info("Using ClassLoader: {}", classLoader.getClass().getName());
-                
-                InputStream serviceAccount = classLoader.getResourceAsStream(resourcePath);
-                
-                if (serviceAccount == null) {
-                    // Try alternative paths
-                    logger.warn("Resource not found at: {}, trying alternative paths...", resourcePath);
-                    serviceAccount = classLoader.getResourceAsStream("/" + resourcePath);
+                // Check if path is an environment variable or file path
+                if (credentialsPath.startsWith("classpath:")) {
+                    // Load from classpath
+                    String resourcePath = credentialsPath.replace("classpath:", "");
+                    logger.info("Attempting to load Firebase credentials from classpath: {}", resourcePath);
+                    
+                    ClassLoader classLoader = getClass().getClassLoader();
+                    logger.info("Using ClassLoader: {}", classLoader.getClass().getName());
+                    
+                    serviceAccount = classLoader.getResourceAsStream(resourcePath);
+                    
                     if (serviceAccount == null) {
-                        logger.warn("Trying: firebase/serviceAccountKey.json");
-                        serviceAccount = classLoader.getResourceAsStream("firebase/serviceAccountKey.json");
+                        // Try alternative paths
+                        logger.warn("Resource not found at: {}, trying alternative paths...", resourcePath);
+                        serviceAccount = classLoader.getResourceAsStream("/" + resourcePath);
+                        if (serviceAccount == null) {
+                            logger.warn("Trying: firebase/serviceAccountKey.json");
+                            serviceAccount = classLoader.getResourceAsStream("firebase/serviceAccountKey.json");
+                        }
+                    }
+                } else {
+                    // Load from file system (environment variable or absolute path)
+                    logger.info("Attempting to load Firebase credentials from file system: {}", credentialsPath);
+                    try {
+                        java.io.File file = new java.io.File(credentialsPath);
+                        if (file.exists() && file.isFile()) {
+                            serviceAccount = new java.io.FileInputStream(file);
+                            logger.info("✅ Firebase credentials file found at: {}", credentialsPath);
+                        } else {
+                            logger.warn("File not found at: {}", credentialsPath);
+                        }
+                    } catch (Exception e) {
+                        logger.warn("Error reading file from path {}: {}", credentialsPath, e.getMessage());
                     }
                 }
                 
                 if (serviceAccount == null) {
                     logger.error("═══════════════════════════════════════════════════════════");
-                    logger.error("❌ CRITICAL: Firebase credentials file NOT FOUND");
+                    logger.error("❌ WARNING: Firebase credentials file NOT FOUND");
                     logger.error("═══════════════════════════════════════════════════════════");
                     logger.error("Tried paths:");
-                    logger.error("  1. {}", resourcePath);
-                    logger.error("  2. /{}", resourcePath);
-                    logger.error("  3. firebase/serviceAccountKey.json");
+                    if (credentialsPath.startsWith("classpath:")) {
+                        String resourcePath = credentialsPath.replace("classpath:", "");
+                        logger.error("  1. {}", resourcePath);
+                        logger.error("  2. /{}", resourcePath);
+                        logger.error("  3. firebase/serviceAccountKey.json");
+                    } else {
+                        logger.error("  1. {}", credentialsPath);
+                    }
                     logger.error("");
-                    logger.error("Please verify:");
-                    logger.error("  - File exists at: src/main/resources/firebase/serviceAccountKey.json");
-                    logger.error("  - File is included in JAR (check target/Uqar-0.0.1-SNAPSHOT.jar)");
-                    logger.error("  - File is not excluded in .dockerignore or pom.xml");
+                    logger.error("⚠️  APPLICATION WILL CONTINUE WITHOUT FIREBASE NOTIFICATIONS");
+                    logger.error("   Set firebase.messaging.enabled=false to suppress this warning");
+                    logger.error("   Or provide credentials via:");
+                    logger.error("   - Environment variable: FIREBASE_CREDENTIALS_PATH");
+                    logger.error("   - Docker secret mount");
+                    logger.error("   - File path in application.yml");
                     logger.error("═══════════════════════════════════════════════════════════");
                     
-                    // List available resources for debugging
-                    try {
-                        java.net.URL resourceUrl = classLoader.getResource("firebase");
-                        if (resourceUrl != null) {
-                            logger.info("Firebase directory found at: {}", resourceUrl);
-                        } else {
-                            logger.warn("Firebase directory not found in classpath");
-                        }
-                    } catch (Exception e) {
-                        logger.debug("Could not check for firebase directory: {}", e.getMessage());
-                    }
-                    
-                    throw new IllegalStateException(
-                        "Firebase credentials file not found. " +
-                        "Expected at: " + resourcePath + " in classpath. " +
-                        "Please ensure the file exists in src/main/resources/firebase/serviceAccountKey.json " +
-                        "and is included in the JAR during Maven build."
-                    );
+                    initializationFailed = true;
+                    return; // Don't throw exception - allow app to continue
                 }
                 
                 logger.info("✅ Firebase credentials file FOUND");
                 
                 // Read the file to verify it's valid
                 byte[] bytes = serviceAccount.readAllBytes();
+                serviceAccount.close();
                 logger.info("Credentials file size: {} bytes", bytes.length);
                 
                 if (bytes.length == 0) {
-                    throw new IllegalStateException("Firebase credentials file is empty!");
+                    logger.error("Firebase credentials file is empty!");
+                    initializationFailed = true;
+                    return; // Don't throw - allow app to continue
                 }
                 
                 // Verify it's valid JSON
                 try {
                     String jsonContent = new String(bytes);
                     if (!jsonContent.trim().startsWith("{")) {
-                        throw new IllegalStateException("Firebase credentials file does not appear to be valid JSON");
+                        logger.error("Firebase credentials file does not appear to be valid JSON");
+                        initializationFailed = true;
+                        return; // Don't throw - allow app to continue
                     }
                     logger.info("✅ Credentials file appears to be valid JSON");
                 } catch (Exception e) {
@@ -134,13 +154,18 @@ public class FirebaseConfig {
                 java.io.ByteArrayInputStream credentialsStream = new java.io.ByteArrayInputStream(bytes);
                 
                 logger.info("Creating FirebaseOptions...");
-                FirebaseOptions options = FirebaseOptions.builder()
-                    .setCredentials(GoogleCredentials.fromStream(credentialsStream))
-                    .setProjectId(projectId)
-                    .build();
+                FirebaseOptions.Builder optionsBuilder = FirebaseOptions.builder()
+                    .setCredentials(GoogleCredentials.fromStream(credentialsStream));
+                
+                if (projectId != null && !projectId.trim().isEmpty()) {
+                    optionsBuilder.setProjectId(projectId);
+                }
+                
+                FirebaseOptions options = optionsBuilder.build();
                 
                 logger.info("Initializing FirebaseApp...");
                 FirebaseApp.initializeApp(options);
+                initializationFailed = false;
                 logger.info("═══════════════════════════════════════════════════════════");
                 logger.info("✅ Firebase initialized SUCCESSFULLY");
                 logger.info("   Project ID: {}", projectId);
@@ -149,47 +174,63 @@ public class FirebaseConfig {
             } else {
                 FirebaseApp existingApp = FirebaseApp.getInstance();
                 logger.info("Firebase already initialized: {}", existingApp.getName());
+                initializationFailed = false;
             }
         } catch (IOException e) {
             logger.error("═══════════════════════════════════════════════════════════");
             logger.error("❌ IOException while initializing Firebase");
             logger.error("═══════════════════════════════════════════════════════════");
-            logger.error("Error: {}", e.getMessage(), e);
-            throw new IllegalStateException("Failed to initialize Firebase due to IO error: " + e.getMessage(), e);
+            logger.error("Error: {}", e.getMessage());
+            logger.error("⚠️  APPLICATION WILL CONTINUE WITHOUT FIREBASE NOTIFICATIONS");
+            initializationFailed = true;
+            // Don't throw exception - allow app to continue
         } catch (IllegalArgumentException e) {
             logger.error("═══════════════════════════════════════════════════════════");
             logger.error("❌ Invalid Firebase credentials");
             logger.error("═══════════════════════════════════════════════════════════");
-            logger.error("Error: {}", e.getMessage(), e);
+            logger.error("Error: {}", e.getMessage());
             logger.error("This usually means:");
             logger.error("  - Credentials file is invalid or corrupted");
             logger.error("  - JSON format is malformed");
             logger.error("  - Required fields are missing");
-            throw new IllegalStateException("Failed to initialize Firebase: Invalid credentials file. " + e.getMessage(), e);
+            logger.error("⚠️  APPLICATION WILL CONTINUE WITHOUT FIREBASE NOTIFICATIONS");
+            initializationFailed = true;
+            // Don't throw exception - allow app to continue
         } catch (Exception e) {
             logger.error("═══════════════════════════════════════════════════════════");
             logger.error("❌ Unexpected error initializing Firebase");
             logger.error("═══════════════════════════════════════════════════════════");
             logger.error("Exception type: {}", e.getClass().getName());
-            logger.error("Error: {}", e.getMessage(), e);
-            throw new IllegalStateException("Failed to initialize Firebase: " + e.getMessage(), e);
+            logger.error("Error: {}", e.getMessage());
+            logger.error("⚠️  APPLICATION WILL CONTINUE WITHOUT FIREBASE NOTIFICATIONS");
+            initializationFailed = true;
+            // Don't throw exception - allow app to continue
         }
+    }
+    
+    /**
+     * Check if Firebase initialization failed
+     */
+    public static boolean isInitializationFailed() {
+        return initializationFailed;
     }
     
     @Bean
     @ConditionalOnProperty(name = "firebase.messaging.enabled", havingValue = "true", matchIfMissing = true)
     public FirebaseApp firebaseApp() {
         if (FirebaseApp.getApps().isEmpty()) {
-            logger.error("FirebaseApp is not initialized. " +
-                        "This usually means Firebase initialization failed during @PostConstruct. " +
-                        "Check logs above for initialization errors.");
-            // Don't return null - throw exception to prevent bean creation
-            throw new IllegalStateException(
-                "FirebaseApp is not initialized. " +
-                "Please check: 1) Firebase credentials file exists at the configured path, " +
-                "2) Credentials file is valid JSON, 3) Project ID is correct, " +
-                "4) Check @PostConstruct initialization logs for errors"
-            );
+            if (initializationFailed) {
+                logger.warn("FirebaseApp is not initialized due to previous failure. " +
+                           "Application will continue without Firebase notifications. " +
+                           "Check logs above for initialization errors.");
+                // Return null to prevent bean creation, but don't throw exception
+                return null;
+            }
+            logger.warn("FirebaseApp is not initialized. " +
+                       "This usually means Firebase initialization failed during @PostConstruct. " +
+                       "Check logs above for initialization errors.");
+            // Return null to prevent bean creation, but don't throw exception
+            return null;
         }
         FirebaseApp app = FirebaseApp.getInstance();
         logger.info("FirebaseApp bean created successfully: {}", app.getName());
@@ -208,14 +249,11 @@ public class FirebaseConfig {
     @ConditionalOnProperty(name = "firebase.messaging.enabled", havingValue = "true", matchIfMissing = true)
     public FirebaseMessaging firebaseMessaging(FirebaseApp firebaseApp) {
         if (firebaseApp == null) {
-            logger.error("FirebaseApp is null. Cannot create FirebaseMessaging bean. " +
-                        "Check Firebase initialization logs above for errors.");
-            // Don't return null - throw exception to prevent bean creation
-            throw new IllegalStateException(
-                "FirebaseApp is not initialized. " +
-                "Please check: 1) Firebase credentials file exists, 2) Firebase initialization succeeded, " +
-                "3) firebase.messaging.enabled=true in application.yml"
-            );
+            logger.warn("FirebaseApp is null. Cannot create FirebaseMessaging bean. " +
+                       "Application will continue without Firebase notifications. " +
+                       "Check Firebase initialization logs above for errors.");
+            // Return null to prevent bean creation, but don't throw exception
+            return null;
         }
         
         try {
@@ -224,8 +262,9 @@ public class FirebaseConfig {
             return messaging;
         } catch (Exception e) {
             logger.error("Error creating FirebaseMessaging bean: {}", e.getMessage(), e);
-            // Don't return null - throw exception to prevent bean creation
-            throw new IllegalStateException("Failed to create FirebaseMessaging bean: " + e.getMessage(), e);
+            logger.warn("Application will continue without Firebase notifications");
+            // Return null to prevent bean creation, but don't throw exception
+            return null;
         }
     }
 }
