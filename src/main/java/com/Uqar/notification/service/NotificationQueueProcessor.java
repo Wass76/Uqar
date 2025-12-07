@@ -190,7 +190,7 @@ public class NotificationQueueProcessor {
      * Includes error handling for database connection issues.
      */
     @Transactional(noRollbackFor = {DataAccessResourceFailureException.class})
-    private void processNotificationInTransaction(Notification notification) {
+     protected void processNotificationInTransaction(Notification notification) {
         // Check retry count
         if (notification.getRetryCount() != null && notification.getRetryCount() >= MAX_RETRY_COUNT) {
             notification.setStatus("FAILED");
@@ -320,7 +320,7 @@ public class NotificationQueueProcessor {
      * Includes error handling for database connection issues.
      */
     @Transactional(noRollbackFor = {DataAccessResourceFailureException.class})
-    private void handleNotificationFailureInTransaction(Notification notification) {
+    protected void handleNotificationFailureInTransaction(Notification notification) {
         int currentRetryCount = notification.getRetryCount() != null ? notification.getRetryCount() : 0;
         int newRetryCount = currentRetryCount + 1;
         

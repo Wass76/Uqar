@@ -2,10 +2,12 @@ package com.Uqar.notification.config;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -218,23 +220,47 @@ public class FirebaseConfig {
     @Bean
     @ConditionalOnProperty(name = "firebase.messaging.enabled", havingValue = "true", matchIfMissing = true)
     public FirebaseApp firebaseApp() {
-        if (FirebaseApp.getApps().isEmpty()) {
+        try {
+            // Check if initialization failed
             if (initializationFailed) {
-                logger.warn("FirebaseApp is not initialized due to previous failure. " +
-                           "Application will continue without Firebase notifications. " +
-                           "Check logs above for initialization errors.");
-                // Return null to prevent bean creation, but don't throw exception
+                logger.warn("FirebaseApp initialization failed previously. Bean will not be created.");
                 return null;
             }
-            logger.warn("FirebaseApp is not initialized. " +
-                       "This usually means Firebase initialization failed during @PostConstruct. " +
-                       "Check logs above for initialization errors.");
-            // Return null to prevent bean creation, but don't throw exception
+            
+            // Try to get FirebaseApp instance
+            List<FirebaseApp> apps = FirebaseApp.getApps();
+            logger.debug("Found {} FirebaseApp instances", apps.size());
+            
+            if (apps.isEmpty()) {
+                logger.warn("FirebaseApp is not initialized. " +
+                           "This usually means Firebase initialization failed during @PostConstruct. " +
+                           "Check logs above for initialization errors.");
+                return null;
+            }
+            
+            // Get the default app (or first app)
+            FirebaseApp app;
+            try {
+                app = FirebaseApp.getInstance();
+            } catch (IllegalStateException e) {
+                // If no default app, try to get the first one
+                if (!apps.isEmpty()) {
+                    app = apps.get(0);
+                    logger.info("Using first available FirebaseApp: {}", app.getName());
+                } else {
+                    logger.error("No FirebaseApp instances available");
+                    return null;
+                }
+            }
+            
+            logger.info("═══════════════════════════════════════════════════════════");
+            logger.info("✅ FirebaseApp bean created successfully: {}", app.getName());
+            logger.info("═══════════════════════════════════════════════════════════");
+            return app;
+        } catch (Exception e) {
+            logger.error("Error creating FirebaseApp bean: {}", e.getMessage(), e);
             return null;
         }
-        FirebaseApp app = FirebaseApp.getInstance();
-        logger.info("FirebaseApp bean created successfully: {}", app.getName());
-        return app;
     }
     
     /**
@@ -247,23 +273,25 @@ public class FirebaseConfig {
      */
     @Bean
     @ConditionalOnProperty(name = "firebase.messaging.enabled", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnBean(FirebaseApp.class)
     public FirebaseMessaging firebaseMessaging(FirebaseApp firebaseApp) {
         if (firebaseApp == null) {
-            logger.warn("FirebaseApp is null. Cannot create FirebaseMessaging bean. " +
-                       "Application will continue without Firebase notifications. " +
-                       "Check Firebase initialization logs above for errors.");
-            // Return null to prevent bean creation, but don't throw exception
+            logger.error("FirebaseApp is null. Cannot create FirebaseMessaging bean. " +
+                       "This should not happen if @ConditionalOnBean is working correctly.");
             return null;
         }
         
         try {
             FirebaseMessaging messaging = FirebaseMessaging.getInstance(firebaseApp);
-            logger.info("FirebaseMessaging bean created successfully");
+            logger.info("═══════════════════════════════════════════════════════════");
+            logger.info("✅ FirebaseMessaging bean created successfully");
+            logger.info("═══════════════════════════════════════════════════════════");
             return messaging;
         } catch (Exception e) {
-            logger.error("Error creating FirebaseMessaging bean: {}", e.getMessage(), e);
+            logger.error("═══════════════════════════════════════════════════════════");
+            logger.error("❌ Error creating FirebaseMessaging bean: {}", e.getMessage(), e);
+            logger.error("═══════════════════════════════════════════════════════════");
             logger.warn("Application will continue without Firebase notifications");
-            // Return null to prevent bean creation, but don't throw exception
             return null;
         }
     }
