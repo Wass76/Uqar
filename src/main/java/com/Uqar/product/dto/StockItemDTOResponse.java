@@ -59,4 +59,7 @@ public class StockItemDTOResponse {
     
     private String reason; // سبب الإضافة (للتعديلات بدون فاتورة)
     private String notes; // ملاحظات إضافية
+    
+    private Integer numberOfPartsPerBox;
+    private Integer remainingParts; 
 } 

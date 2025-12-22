@@ -1,20 +1,26 @@
 package com.Uqar.sale.mapper;
 
-import com.Uqar.sale.dto.*;
-import com.Uqar.sale.entity.*;
-import com.Uqar.product.entity.StockItem;
-import com.Uqar.product.mapper.StockItemMapper;
-import com.Uqar.product.service.CurrencyConversionService;
-import com.Uqar.user.entity.Customer;
-import com.Uqar.user.entity.Pharmacy;
-import com.Uqar.user.Enum.Currency;
-
-import jakarta.persistence.EntityNotFoundException;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Component;
+
+import com.Uqar.product.entity.StockItem;
+import com.Uqar.product.mapper.StockItemMapper;
+import com.Uqar.product.service.CurrencyConversionService;
+import com.Uqar.sale.dto.SaleInvoiceDTORequest;
+import com.Uqar.sale.dto.SaleInvoiceDTOResponse;
+import com.Uqar.sale.dto.SaleInvoiceItemDTORequest;
+import com.Uqar.sale.dto.SaleInvoiceItemDTOResponse;
+import com.Uqar.sale.entity.SaleInvoice;
+import com.Uqar.sale.entity.SaleInvoiceItem;
+import com.Uqar.user.Enum.Currency;
+import com.Uqar.user.entity.Customer;
+import com.Uqar.user.entity.Pharmacy;
+
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
@@ -51,37 +57,109 @@ public class SaleMapper {
     public SaleInvoiceItem toEntity(SaleInvoiceItemDTORequest dto, StockItem stockItem, Currency currency) {
         SaleInvoiceItem item = new SaleInvoiceItem();
         item.setStockItem(stockItem);
-        item.setQuantity(dto.getQuantity());
         
-        if (dto.getUnitPrice() != null) {
-            // إذا تم تحديد السعر يدوياً، نطبق تحويل العملة عليه
+        // الحصول على عدد الأجزاء في العلبة
+        Integer numberOfPartsPerBox = stockItemMapper.getNumberOfPartsPerBox(
+            stockItem.getProductId(), 
+            stockItem.getProductType()
+        );
+        
+        // تحديد ما إذا كان بيع جزئي
+        boolean isPartialSale = dto.getPartsToSell() != null && 
+                                numberOfPartsPerBox != null && 
+                                numberOfPartsPerBox > 1;
+        
+        // حساب السعر النهائي
+        Float finalUnitPrice;
+        Integer finalQuantity;
+        
+        if (isPartialSale) {
+            // بيع جزئي: حساب السعر بناءً على الأجزاء
+            // حفظ عدد الأجزاء المباعة
+            item.setPartsSold(dto.getPartsToSell());
+            
+            // في البيع الجزئي: quantity = 0 لأننا سنتعامل مع remainingParts في SaleService
+            // عدد العلبات المخصومة سيتم حسابه بناءً على remainingParts
+            finalQuantity = 0;
+            
+            // حساب السعر: إذا تم إرسال partPrice يدوياً، استخدمه كسعر الجزء الواحد واضربه بعدد الأجزاء
+            // وإلا احسبه من unitPrice (سعر العلبة) مع 20% ربح
+            if (dto.getPartPrice() != null && dto.getPartPrice() > 0) {
+                // الصيدلاني حدد partPrice يدوياً كسعر الجزء الواحد: اضربه بعدد الأجزاء
+                finalUnitPrice = dto.getPartPrice() * dto.getPartsToSell();
+            } else {
+                // حساب تلقائي: نحتاج سعر العلبة أولاً
+                Float baseBoxPrice;
+                
+                // استخدام unitPrice إذا تم إرساله، وإلا سعر البيع من المخزون
+                if (dto.getUnitPrice() != null && dto.getUnitPrice() > 0) {
+                    baseBoxPrice = dto.getUnitPrice();
+                } else {
+                    // استخدام سعر البيع من المخزون
+                    Float sellingPrice = stockItemMapper.getProductSellingPrice(
+                        stockItem.getProductId(), 
+                        stockItem.getProductType()
+                    );
+                    
+                    if (sellingPrice != null && sellingPrice > 0) {
+                        baseBoxPrice = sellingPrice;
+                    } else {
+                        // Fallback to purchase price if no selling price is set
+                        baseBoxPrice = stockItem.getActualPurchasePrice().floatValue();
+                    }
+                }
+                
+                // سعر الجزء الواحد (بدون هامش ربح) = سعر العلبة / عدد الأجزاء
+                Float pricePerPart = baseBoxPrice / numberOfPartsPerBox;
+                
+                // سعر الأجزاء المباعة (مع 20% هامش ربح)
+                Float totalPriceForParts = pricePerPart * dto.getPartsToSell() * 1.20f;
+                
+                finalUnitPrice = totalPriceForParts; // السعر الكلي للأجزاء المباعة
+            }
+            
+            // تحويل السعر إلى العملة المطلوبة
             BigDecimal convertedPrice = currencyConversionService.getDisplayPrice(
-                BigDecimal.valueOf(dto.getUnitPrice()), 
+                BigDecimal.valueOf(finalUnitPrice), 
                 currency
             );
-            item.setUnitPrice(convertedPrice.floatValue());
+            finalUnitPrice = convertedPrice.floatValue();
         } else {
-            // استخدام سعر البيع من المخزون وتطبيق تحويل العملة
-            Float sellingPrice = stockItemMapper.getProductSellingPrice(
-                stockItem.getProductId(), 
-                stockItem.getProductType()
-            );
+            // بيع علبة كاملة: partsSold = null
+            item.setPartsSold(null);
+            // بيع علبة كاملة: السعر العادي
+            finalQuantity = dto.getQuantity(); // عدد علب للخصم
             
-            if (sellingPrice != null && sellingPrice > 0) {
-                BigDecimal convertedPrice = currencyConversionService.getDisplayPrice(
-                    BigDecimal.valueOf(sellingPrice), 
-                    currency
-                );
-                item.setUnitPrice(convertedPrice.floatValue());
+            // تحديد سعر العلبة: إذا تم إرسال unitPrice يدوياً، استخدمه. وإلا استخدم سعر المخزون
+            Float baseBoxPrice;
+            if (dto.getUnitPrice() != null && dto.getUnitPrice() > 0) {
+                // إذا تم تحديد السعر يدوياً
+                baseBoxPrice = dto.getUnitPrice();
             } else {
-                // Fallback to purchase price if no selling price is set
-                BigDecimal convertedPrice = currencyConversionService.getDisplayPrice(
-                    BigDecimal.valueOf(stockItem.getActualPurchasePrice()), 
-                    currency
+                // استخدام سعر البيع من المخزون
+                Float sellingPrice = stockItemMapper.getProductSellingPrice(
+                    stockItem.getProductId(), 
+                    stockItem.getProductType()
                 );
-                item.setUnitPrice(convertedPrice.floatValue());
+                
+                if (sellingPrice != null && sellingPrice > 0) {
+                    baseBoxPrice = sellingPrice;
+                } else {
+                    // Fallback to purchase price if no selling price is set
+                    baseBoxPrice = stockItem.getActualPurchasePrice().floatValue();
+                }
             }
+            
+            // تحويل سعر العلبة إلى العملة المطلوبة
+            BigDecimal convertedPrice = currencyConversionService.getDisplayPrice(
+                BigDecimal.valueOf(baseBoxPrice), 
+                currency
+            );
+            finalUnitPrice = convertedPrice.floatValue();
         }
+        
+        item.setQuantity(finalQuantity);
+        item.setUnitPrice(finalUnitPrice);
         
         return item;
     }

@@ -12,7 +12,10 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
 
+import com.Uqar.product.Enum.InventoryAdjustmentReason;
 import com.Uqar.product.Enum.ProductType;
+import com.Uqar.product.dto.FullInventoryResetRequest;
+import com.Uqar.product.dto.PartialInventoryAdjustmentRequest;
 import com.Uqar.product.dto.StockItemDTOResponse;
 import com.Uqar.product.dto.StockItemDetailDTOResponse;
 import com.Uqar.product.dto.StockItemWithProductInfoDTOResponse;
@@ -29,6 +32,7 @@ import com.Uqar.product.repo.StockItemRepo;
 import com.Uqar.product.service.CurrencyConversionService;
 import com.Uqar.purchase.repository.PurchaseOrderItemRepo;
 import com.Uqar.user.Enum.Currency;
+import com.Uqar.user.entity.Pharmacy;
 
 import lombok.RequiredArgsConstructor;
 
@@ -102,7 +106,9 @@ public class StockItemMapper {
                 .purchaseInvoiceNumber(stockItem.getPurchaseInvoice() != null ? 
                     stockItem.getPurchaseInvoice().getInvoiceNumber() : null)
                 .reason(stockItem.getReason() != null ? stockItem.getReason().name() : null)
-                .notes(stockItem.getNotes());
+                .notes(stockItem.getNotes())
+                .numberOfPartsPerBox(getNumberOfPartsPerBox(stockItem.getProductId(), stockItem.getProductType()))
+                .remainingParts(stockItem.getRemainingParts());
         
         // Apply currency conversion if currency is specified (including SYP)
         if (currency != null) {
@@ -412,6 +418,28 @@ public class StockItemMapper {
         }
         return 0f;
     }
+    
+    /**
+     * الحصول على عدد الأجزاء في العلبة للمنتج
+     * Get number of parts per box for product
+     */
+    public Integer getNumberOfPartsPerBox(Long productId, ProductType productType) {
+        try {
+            if (productType == ProductType.PHARMACY) {
+                Optional<PharmacyProduct> pharmacyProduct = pharmacyProductRepo.findById(productId);
+                if (pharmacyProduct.isPresent()) {
+                    return pharmacyProduct.get().getNumberOfPartsPerBox();
+                }
+            } else if (productType == ProductType.MASTER) {
+                Optional<MasterProduct> masterProduct = masterProductRepo.findById(productId);
+                if (masterProduct.isPresent()) {
+                    return masterProduct.get().getNumberOfPartsPerBox();
+                }
+            }
+        } catch (Exception e) {
+        }
+        return null; // null يعني لا يباع جزئياً
+    }
 
     // private Integer getTotalFromPurchaseInvoice(StockItem stockItem) {
     //     try {
@@ -488,13 +516,29 @@ public class StockItemMapper {
             return null;
         }
         
-        Integer totalQuantity = stockItems.stream().mapToInt(StockItem::getQuantity).sum();
+        Integer totalQuantity = stockItems.stream()
+            .mapToInt(item -> item.getQuantity() != null ? item.getQuantity() : 0)
+            .sum();
         Integer totalBonusQuantity = stockItems.stream().mapToInt(item -> item.getBonusQty() != null ? item.getBonusQty() : 0).sum();
-        Double actualPurchasePrice = stockItems.stream()
-            .mapToDouble(item -> item.getActualPurchasePrice() * item.getQuantity())
-            .sum() / totalQuantity;
-        // Round to 2 decimal places
-        actualPurchasePrice = Math.round(actualPurchasePrice * 100.0) / 100.0;
+        
+        // Calculate weighted average purchase price, handling null values and division by zero
+        Double actualPurchasePrice = 0.0;
+        if (totalQuantity > 0) {
+            double totalWeightedPrice = stockItems.stream()
+                .filter(item -> item.getActualPurchasePrice() != null && item.getQuantity() != null && item.getQuantity() > 0)
+                .mapToDouble(item -> item.getActualPurchasePrice() * item.getQuantity())
+                .sum();
+            actualPurchasePrice = totalWeightedPrice / totalQuantity;
+            // Round to 2 decimal places
+            actualPurchasePrice = Math.round(actualPurchasePrice * 100.0) / 100.0;
+        } else {
+            // If totalQuantity is 0, try to get the first non-null purchase price as fallback
+            actualPurchasePrice = stockItems.stream()
+                .filter(item -> item.getActualPurchasePrice() != null)
+                .map(StockItem::getActualPurchasePrice)
+                .findFirst()
+                .orElse(0.0);
+        }   
         
         Double totalValue = totalQuantity * actualPurchasePrice;
         // Round to 2 decimal places
@@ -553,7 +597,11 @@ public class StockItemMapper {
             .earliestExpiryDate(earliestExpiryDate)
             .latestExpiryDate(latestExpiryDate)
             .numberOfBatches(stockItems.size())
-            .pharmacyId(pharmacyId);
+            .pharmacyId(pharmacyId)
+            .numberOfPartsPerBox(getNumberOfPartsPerBox(productId, productType))
+            .remainingParts(stockItems.stream()
+                .mapToInt(item -> item.getRemainingParts() != null ? item.getRemainingParts() : 0)
+                .sum());
         
         // Apply dual currency conversion if requested
         if (dualCurrency) {
@@ -599,5 +647,147 @@ public class StockItemMapper {
                        .rateSource(convertedPrice.getRateSource());
             }
         }
+    }
+    
+    /**
+     * تحويل InventoryItemDTO إلى StockItem للجرد الكامل
+     * Convert InventoryItemDTO to StockItem for full inventory reset
+     * 
+     * @param itemDTO DTO من الجرد الكامل
+     * @param pharmacy الصيدلية
+     * @param actualPurchasePriceInSYP سعر الشراء بالليرة السورية
+     * @param batchPrefix بادئة Batch Number
+     * @param reason سبب الجرد
+     * @param notes ملاحظات
+     * @return StockItem جديد
+     */
+    public StockItem toStockItemFromInventoryItemDTO(
+            FullInventoryResetRequest.InventoryItemDTO itemDTO,
+            Pharmacy pharmacy,
+            Double actualPurchasePriceInSYP,
+            String batchPrefix,
+            InventoryAdjustmentReason reason,
+            String notes) {
+        
+        return createStockItemForInventoryCount(
+            itemDTO.getProductId(),
+            itemDTO.getProductType(),
+            pharmacy,
+            itemDTO.getQuantity(),
+            itemDTO.getExpiryDate(),
+            actualPurchasePriceInSYP,
+            batchPrefix,
+            reason,
+            notes,
+            itemDTO.getMinStockLevel()
+        );
+    }
+    
+    /**
+     * Method مساعد لإنشاء StockItem للجرد (الكامل أو الجزئي)
+     * Helper method to create StockItem for inventory counting (full or partial)
+     * 
+     * @param productId معرف المنتج
+     * @param productType نوع المنتج
+     * @param pharmacy الصيدلية
+     * @param quantity الكمية
+     * @param expiryDate تاريخ الصلاحية (يمكن أن يكون null)
+     * @param actualPurchasePriceInSYP سعر الشراء بالليرة السورية
+     * @param batchPrefix بادئة Batch Number
+     * @param reason سبب الجرد
+     * @param notes ملاحظات
+     * @param minStockLevel الحد الأدنى للمخزون (يمكن أن يكون null)
+     * @return StockItem جديد
+     */
+    public StockItem createStockItemForInventoryCount(
+            Long productId,
+            ProductType productType,
+            com.Uqar.user.entity.Pharmacy pharmacy,
+            Integer quantity,
+            java.time.LocalDate expiryDate,
+            Double actualPurchasePriceInSYP,
+            String batchPrefix,
+            InventoryAdjustmentReason reason,
+            String notes,
+            Integer minStockLevel) {
+        
+        StockItem stockItem = new StockItem();
+        
+        // المعلومات الأساسية
+        stockItem.setProductId(productId);
+        stockItem.setProductType(productType);
+        stockItem.setPharmacy(pharmacy);
+        
+        // الكميات
+        stockItem.setQuantity(quantity);
+        stockItem.setBonusQty(0); // لا يوجد bonus في الجرد
+        
+        // الأسعار
+        stockItem.setActualPurchasePrice(actualPurchasePriceInSYP);
+        
+        // معلومات الدفعة والصلاحية
+        stockItem.setExpiryDate(expiryDate);
+        
+        // إنشاء Batch جديد تلقائياً
+        String batchNo = batchPrefix + "-" + productId;
+        stockItem.setBatchNo(batchNo);
+        
+        // لا يوجد فاتورة شراء
+        stockItem.setPurchaseInvoice(null);
+        
+        // معلومات التدقيق (Audit)
+        stockItem.setReason(reason);
+        stockItem.setNotes(notes);
+        
+        // الحد الأدنى للمخزون (إذا تم إرساله)
+        if (minStockLevel != null) {
+            stockItem.setMinStockLevel(minStockLevel);
+        }
+        
+        // تعيين remainingParts بناءً على numberOfPartsPerBox
+        Integer numberOfPartsPerBox = getNumberOfPartsPerBox(productId, productType);
+        if (numberOfPartsPerBox != null && numberOfPartsPerBox > 1) {
+            // المنتج قابل للبيع الجزئي: تعيين remainingParts = numberOfPartsPerBox للعلبة الأولى
+            stockItem.setRemainingParts(numberOfPartsPerBox);
+        } else {
+            // المنتج لا يباع جزئياً
+            stockItem.setRemainingParts(null);
+        }
+        
+        return stockItem;
+    }
+    
+    /**
+     * تحويل PartialInventoryAdjustmentRequest إلى StockItem للجرد الجزئي
+     * Convert PartialInventoryAdjustmentRequest to StockItem for partial inventory adjustment
+     * 
+     * @param request DTO من الجرد الجزئي
+     * @param pharmacy الصيدلية
+     * @param actualPurchasePriceInSYP سعر الشراء بالليرة السورية
+     * @param batchPrefix بادئة Batch Number
+     * @param reason سبب الجرد
+     * @param notes ملاحظات
+     * @return StockItem جديد
+     */
+    public StockItem toStockItemFromPartialInventoryRequest(
+            PartialInventoryAdjustmentRequest request,
+            Pharmacy pharmacy,
+            Double actualPurchasePriceInSYP,
+            String batchPrefix,
+            InventoryAdjustmentReason reason,
+            String notes) {
+        
+        return createStockItemForInventoryCount(
+            request.getProductId(),
+            request.getProductType(),
+            pharmacy,
+            request.getNewQuantity(),
+            request.getNewExpiryDate(),
+            actualPurchasePriceInSYP,
+            batchPrefix,
+            reason,
+            notes,
+            request.getMinStockLevel()
+        );
     }
 } 

@@ -61,6 +61,8 @@ public class StockProductOverallDTOResponse {
     private Double exchangeRateSYPToUSD;
     private String conversionTimestampSYPToUSD;
     private String rateSource;
+    private Integer numberOfPartsPerBox;
+    private Integer remainingParts;
     
     /**
      * Check if dual currency display is enabled

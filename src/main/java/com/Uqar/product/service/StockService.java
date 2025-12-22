@@ -16,8 +16,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.Uqar.moneybox.service.ExchangeRateService;
+import com.Uqar.product.Enum.InventoryAdjustmentReason;
 import com.Uqar.product.Enum.ProductType;
+import com.Uqar.product.dto.FullInventoryResetRequest;
 import com.Uqar.product.dto.InventoryAdjustmentRequest;
+import com.Uqar.product.dto.InventoryCountSummaryResponse;
 import com.Uqar.product.dto.StockItemDTOResponse;
 import com.Uqar.product.dto.StockItemDetailDTOResponse;
 import com.Uqar.product.dto.StockProductOverallDTOResponse;
@@ -28,6 +31,7 @@ import com.Uqar.product.mapper.StockItemMapper;
 import com.Uqar.product.repo.MasterProductRepo;
 import com.Uqar.product.repo.PharmacyProductRepo;
 import com.Uqar.product.repo.StockItemRepo;
+import com.Uqar.sale.repo.SaleInvoiceItemRepository;
 import com.Uqar.user.Enum.Currency;
 import com.Uqar.user.entity.Employee;
 import com.Uqar.user.entity.Pharmacy;
@@ -50,19 +54,22 @@ public class StockService extends BaseSecurityService {
     private final MasterProductRepo masterProductRepo;
     private final PharmacyProductRepo pharmacyProductRepo;
     private final ExchangeRateService exchangeRateService;
+    private final SaleInvoiceItemRepository saleInvoiceItemRepository;
 
     public StockService(StockItemRepo stockItemRepo,
                                 @Lazy StockItemMapper stockItemMapper,
                                 UserRepository userRepository,
                                 MasterProductRepo masterProductRepo,
                                 PharmacyProductRepo pharmacyProductRepo,
-                                ExchangeRateService exchangeRateService) {
+                                ExchangeRateService exchangeRateService,
+                                SaleInvoiceItemRepository saleInvoiceItemRepository) {
         super(userRepository);
         this.stockItemRepo = stockItemRepo; 
         this.stockItemMapper = stockItemMapper;
         this.masterProductRepo = masterProductRepo;
         this.pharmacyProductRepo = pharmacyProductRepo;
         this.exchangeRateService = exchangeRateService;
+        this.saleInvoiceItemRepository = saleInvoiceItemRepository;
     }
 
     public StockItemDTOResponse editStockQuantity(Long stockItemId, Integer newQuantity, 
@@ -615,6 +622,348 @@ public class StockService extends BaseSecurityService {
         java.math.BigDecimal priceInSYP = exchangeRateService.convertToSYP(priceBigDecimal, fromCurrency);
         
         return priceInSYP.doubleValue();
+    }
+
+    /**
+     * الجرد الكامل - حذف جميع سجلات المخزون وإعادة إدخالها من الصفر
+     * Full Inventory Reset - Delete all stock records and re-enter from scratch
+     * 
+     * Use Case: INV-FULL-01
+     * Process:
+     * 1. Delete all StockItem records for the pharmacy
+     * 2. Re-enter inventory from scratch with new quantities and expiry dates
+     * 3. Automatically create new Batch numbers for each item
+     */
+    @Transactional
+    public List<StockItemDTOResponse> performFullInventoryReset(
+            FullInventoryResetRequest request) {
+        
+        // 1. التحقق من الصلاحيات
+        User currentUser = getCurrentUser();
+        if (!(currentUser instanceof Employee)) {
+            throw new UnAuthorizedException("Only pharmacy employees can perform full inventory reset");
+        }
+        
+        Employee employee = (Employee) currentUser;
+        if (employee.getPharmacy() == null) {
+            throw new UnAuthorizedException("Employee is not associated with any pharmacy");
+        }
+        
+        Pharmacy pharmacy = employee.getPharmacy();
+        Long pharmacyId = pharmacy.getId();
+        
+        // 2. معالجة جميع سجلات StockItem للصيدلية
+        List<StockItem> existingStockItems = stockItemRepo.findByPharmacyId(pharmacyId);
+        if (!existingStockItems.isEmpty()) {
+            // التحقق من العناصر المرتبطة بالمبيعات (لا يمكن حذفها)
+            List<Long> stockItemIds = existingStockItems.stream()
+                .map(StockItem::getId)
+                .collect(Collectors.toList());
+            
+            List<Long> referencedStockItemIds = saleInvoiceItemRepository.findStockItemIdsReferencedInSales(stockItemIds);
+            
+            // فصل العناصر إلى: مرتبطة بالمبيعات وغير مرتبطة
+            List<StockItem> referencedStockItems = existingStockItems.stream()
+                .filter(item -> referencedStockItemIds.contains(item.getId()))
+                .collect(Collectors.toList());
+            
+            List<StockItem> nonReferencedStockItems = existingStockItems.stream()
+                .filter(item -> !referencedStockItemIds.contains(item.getId()))
+                .collect(Collectors.toList());
+            
+            // حذف العناصر غير المرتبطة
+            if (!nonReferencedStockItems.isEmpty()) {
+                stockItemRepo.deleteAll(nonReferencedStockItems);
+                logger.info("Deleted {} non-referenced stock items for pharmacy {} during full inventory reset", 
+                           nonReferencedStockItems.size(), pharmacyId);
+            }
+            
+            // معالجة العناصر المرتبطة بالمبيعات: وضع الكمية على 0 (لا يمكن حذفها)
+            for (StockItem referencedItem : referencedStockItems) {
+                referencedItem.setQuantity(0);
+                referencedItem.setNotes((referencedItem.getNotes() != null ? referencedItem.getNotes() + " | " : "") + 
+                    "Full inventory reset - quantity set to 0 (referenced in sales) - " + LocalDateTime.now());
+                stockItemRepo.save(referencedItem);
+            }
+            
+            if (!referencedStockItems.isEmpty()) {
+                logger.info("Updated {} referenced stock items (set quantity to 0) for pharmacy {} during full inventory reset", 
+                           referencedStockItems.size(), pharmacyId);
+            }
+        }
+        
+        // 3. التحقق من وجود عناصر في الطلب
+        if (request.getItems() == null || request.getItems().isEmpty()) {
+            throw new ConflictException("Cannot perform full inventory reset with empty items list");
+        }
+        
+        // 4. إعادة إدخال المخزون من الصفر
+        List<StockItemDTOResponse> createdItems = new ArrayList<>();
+        String batchPrefix = generateBatchNumberPrefix();
+        
+        for (FullInventoryResetRequest.InventoryItemDTO itemDTO : request.getItems()) {
+            // التحقق من صحة البيانات
+            if (itemDTO.getProductId() == null) {
+                throw new ConflictException("Product ID is required for all items");
+            }
+            if (itemDTO.getProductType() == null) {
+                throw new ConflictException("Product type is required for all items");
+            }
+            if (itemDTO.getQuantity() == null || itemDTO.getQuantity() <= 0) {
+                throw new ConflictException("Quantity must be greater than 0 for all items");
+            }
+            
+            // الحصول على المنتج للتحقق من وجوده والحصول على السعر
+            Object product = getProductForAdjustment(itemDTO.getProductId(), itemDTO.getProductType(), pharmacyId);
+            
+            // تحديد العملة (افتراضي: SYP)
+            Currency requestCurrency = itemDTO.getCurrency() != null ? itemDTO.getCurrency() : Currency.SYP;
+            
+            // تحديد سعر الشراء (إذا تم إرسال actualPurchasePrice استخدمه، وإلا استخدم refPurchasePrice من المنتج)
+            Double actualPurchasePrice = determinePurchasePriceForInventoryCount(
+                itemDTO.getProductId(), itemDTO.getProductType(), product, itemDTO.getActualPurchasePrice());
+            
+            // تحويل سعر الشراء من العملة المحددة إلى SYP قبل الحفظ
+            Double actualPurchasePriceInSYP = convertPriceToSYP(actualPurchasePrice, requestCurrency);
+            
+            if (requestCurrency != Currency.SYP && itemDTO.getActualPurchasePrice() != null) {
+                logger.info("Converted purchase price from {} {} to {} SYP for product {} during full inventory reset", 
+                           actualPurchasePrice, requestCurrency, actualPurchasePriceInSYP, itemDTO.getProductId());
+            }
+            
+            // التحقق من تاريخ الصلاحية
+            if (itemDTO.getExpiryDate() != null) {
+                validateExpiryDate(itemDTO.getExpiryDate());
+            }
+            
+            // إنشاء StockItem جديد باستخدام Mapper
+            StockItem stockItem = stockItemMapper.toStockItemFromInventoryItemDTO(
+                itemDTO,
+                pharmacy,
+                actualPurchasePriceInSYP,
+                batchPrefix,
+                InventoryAdjustmentReason.INVENTORY_COUNT,
+                "Full inventory reset - " + LocalDateTime.now()
+            );
+            
+            // حفظ StockItem
+            StockItem savedStockItem = stockItemRepo.save(stockItem);
+            
+            // إضافة للاستجابة
+            StockItemDTOResponse response = stockItemMapper.toResponse(savedStockItem);
+            response.setPharmacyId(pharmacyId);
+            createdItems.add(response);
+        }
+        
+        logger.info("Full inventory reset completed for pharmacy {}. Created {} stock items.", 
+                   pharmacyId, createdItems.size());
+        
+        return createdItems;
+    }
+
+    /**
+     * الجرد الجزئي - تعديل مخزون دواء محدد فقط
+     * Partial Inventory Adjustment - Adjust inventory for a specific product only
+     * 
+     * Use Case: INV-PART-02
+     * Process:
+     * 1. Search for existing StockItem(s) for the product
+     * 2. Delete old StockItem(s)
+     * 3. Create new StockItem with modified values
+     */
+    @Transactional
+    public StockItemDTOResponse performPartialInventoryAdjustment(
+            com.Uqar.product.dto.PartialInventoryAdjustmentRequest request) {
+        
+        // 1. التحقق من الصلاحيات
+        User currentUser = getCurrentUser();
+        if (!(currentUser instanceof Employee)) {
+            throw new UnAuthorizedException("Only pharmacy employees can perform partial inventory adjustment");
+        }
+        
+        Employee employee = (Employee) currentUser;
+        if (employee.getPharmacy() == null) {
+            throw new UnAuthorizedException("Employee is not associated with any pharmacy");
+        }
+        
+        Pharmacy pharmacy = employee.getPharmacy();
+        Long pharmacyId = pharmacy.getId();
+        
+        // 2. البحث عن StockItem(s) الحالية للدواء
+        List<StockItem> existingStockItems = stockItemRepo.findByProductIdAndProductTypeAndPharmacyId(
+            request.getProductId(), request.getProductType(), pharmacyId);
+        
+        if (existingStockItems.isEmpty()) {
+            throw new ResourceNotFoundException(
+                String.format("No stock items found for product ID %d (type: %s) in pharmacy %d", 
+                             request.getProductId(), request.getProductType(), pharmacyId));
+        }
+        
+        // 3. الحصول على المنتج للتحقق من وجوده والحصول على السعر
+        Object product = getProductForAdjustment(request.getProductId(), request.getProductType(), pharmacyId);
+        
+        // 4. تحديد العملة (افتراضي: SYP)
+        Currency requestCurrency = request.getCurrency() != null ? request.getCurrency() : Currency.SYP;
+        
+        // 5. تحديد سعر الشراء (إذا تم إرسال actualPurchasePrice استخدمه، وإلا استخدم refPurchasePrice من المنتج)
+        Double actualPurchasePrice = determinePurchasePriceForInventoryCount(
+            request.getProductId(), request.getProductType(), product, request.getActualPurchasePrice());
+        
+        // 6. تحويل سعر الشراء من العملة المحددة إلى SYP قبل الحفظ
+        Double actualPurchasePriceInSYP = convertPriceToSYP(actualPurchasePrice, requestCurrency);
+        
+        if (requestCurrency != Currency.SYP && request.getActualPurchasePrice() != null) {
+            logger.info("Converted purchase price from {} {} to {} SYP for product {} during partial inventory adjustment", 
+                       actualPurchasePrice, requestCurrency, actualPurchasePriceInSYP, request.getProductId());
+        }
+        
+        // 7. التحقق من تاريخ الصلاحية الجديد (إذا تم إرساله)
+        if (request.getNewExpiryDate() != null) {
+            validateExpiryDate(request.getNewExpiryDate());
+        }
+        
+        // 8. التحقق من العناصر المرتبطة بالمبيعات (لا يمكن حذفها)
+        List<Long> stockItemIds = existingStockItems.stream()
+            .map(StockItem::getId)
+            .collect(Collectors.toList());
+        
+        List<Long> referencedStockItemIds = saleInvoiceItemRepository.findStockItemIdsReferencedInSales(stockItemIds);
+        
+        // فصل العناصر إلى: مرتبطة بالمبيعات وغير مرتبطة
+        List<StockItem> referencedStockItems = existingStockItems.stream()
+            .filter(item -> referencedStockItemIds.contains(item.getId()))
+            .collect(Collectors.toList());
+        
+        List<StockItem> nonReferencedStockItems = existingStockItems.stream()
+            .filter(item -> !referencedStockItemIds.contains(item.getId()))
+            .collect(Collectors.toList());
+        
+        // 9. معالجة العناصر غير المرتبطة: حذفها
+        if (!nonReferencedStockItems.isEmpty()) {
+            stockItemRepo.deleteAll(nonReferencedStockItems);
+            logger.info("Deleted {} non-referenced stock items for product {} (type: {}) during partial inventory adjustment", 
+                       nonReferencedStockItems.size(), request.getProductId(), request.getProductType());
+        }
+        
+        // 10. معالجة العناصر المرتبطة بالمبيعات: تحديثها (وضع الكمية على 0)
+        // لا يمكن حذفها لأنها مرتبطة بفواتير مبيعات
+        for (StockItem referencedItem : referencedStockItems) {
+            referencedItem.setQuantity(0);
+            referencedItem.setNotes((referencedItem.getNotes() != null ? referencedItem.getNotes() + " | " : "") + 
+                "Inventory adjusted - quantity set to 0 (referenced in sales) - " + LocalDateTime.now());
+            stockItemRepo.save(referencedItem);
+        }
+        
+        if (!referencedStockItems.isEmpty()) {
+            logger.info("Updated {} referenced stock items (set quantity to 0) for product {} (type: {}) during partial inventory adjustment", 
+                       referencedStockItems.size(), request.getProductId(), request.getProductType());
+        }
+        
+        // 11. إنشاء StockItem جديد بالقيم المعدلة باستخدام Mapper
+        String batchPrefix = generateBatchNumberPrefix();
+        StockItem newStockItem = stockItemMapper.toStockItemFromPartialInventoryRequest(
+            request,
+            pharmacy,
+            actualPurchasePriceInSYP,
+            batchPrefix,
+            InventoryAdjustmentReason.INVENTORY_COUNT,
+            "Partial inventory adjustment - " + LocalDateTime.now()
+        );
+        
+        // حفظ StockItem الجديد
+        StockItem savedStockItem = stockItemRepo.save(newStockItem);
+        
+        // إرجاع الاستجابة
+        StockItemDTOResponse response = stockItemMapper.toResponse(savedStockItem);
+        response.setPharmacyId(pharmacyId);
+        
+        logger.info("Partial inventory adjustment completed for product {} (type: {}). New quantity: {}", 
+                   request.getProductId(), request.getProductType(), request.getNewQuantity());
+        
+        return response;
+    }
+
+    /**
+     * الحصول على إحصائية الجرد (عدد الأدوية الكلي)
+     * Get inventory count summary (total number of medicines)
+     */
+    public InventoryCountSummaryResponse getInventoryCountSummary() {
+        Long currentPharmacyId = getCurrentUserPharmacyId();
+        
+        // عدد المنتجات الفريدة (unique products)
+        List<Object[]> uniqueProducts = stockItemRepo.findUniqueProductsCombined(currentPharmacyId);
+        Long totalProducts = (long) uniqueProducts.size();
+        
+        // عدد StockItems الإجمالي (batches)
+        List<StockItem> allStockItems = stockItemRepo.findByPharmacyId(currentPharmacyId);
+        Long totalStockItems = (long) allStockItems.size();
+        
+        // الكمية الإجمالية
+        Integer totalQuantity = allStockItems.stream()
+            .mapToInt(StockItem::getQuantity)
+            .sum();
+        
+        return InventoryCountSummaryResponse.builder()
+            .totalProducts(totalProducts)
+            .totalQuantity(totalQuantity)
+            .totalStockItems(totalStockItems)
+            .build();
+    }
+
+    /**
+     * Method مساعد لتحديد سعر الشراء للجرد
+     * Helper method to determine purchase price for inventory count
+     * 
+     * @param productId معرف المنتج
+     * @param productType نوع المنتج
+     * @param product المنتج (MasterProduct أو PharmacyProduct)
+     * @param requestedPrice السعر المطلوب من request (يمكن أن يكون null)
+     * @return سعر الشراء (إذا تم إرسال requestedPrice استخدمه، وإلا استخدم refPurchasePrice من المنتج)
+     */
+    private Double determinePurchasePriceForInventoryCount(Long productId, ProductType productType, Object product, Double requestedPrice) {
+        // إذا تم إرسال سعر في request، استخدمه
+        if (requestedPrice != null && requestedPrice > 0) {
+            return requestedPrice;
+        }
+        
+        // إذا لم يتم إرسال سعر، استخدم refPurchasePrice من المنتج
+        if (productType == ProductType.MASTER) {
+            MasterProduct masterProduct = (MasterProduct) product;
+            Double refPrice = (double) masterProduct.getRefPurchasePrice();
+            
+            if (refPrice <= 0) {
+                throw new ConflictException(
+                    "MasterProduct with ID " + productId + 
+                    " has invalid refPurchasePrice: " + refPrice);
+            }
+            
+            return refPrice;
+        } else if (productType == ProductType.PHARMACY) {
+            PharmacyProduct pharmacyProduct = (PharmacyProduct) product;
+            Double refPrice = (double) pharmacyProduct.getRefPurchasePrice();
+            
+            if (refPrice <= 0) {
+                throw new ConflictException(
+                    "PharmacyProduct with ID " + productId + 
+                    " has invalid refPurchasePrice: " + refPrice);
+            }
+            
+            return refPrice;
+        } else {
+            throw new ConflictException("Invalid productType: " + productType);
+        }
+    }
+
+    /**
+     * Method مساعد لإنشاء Batch Number تلقائياً
+     * Helper method to generate batch number automatically
+     */
+    private String generateBatchNumberPrefix() {
+        // Format: INV-YYYYMMDD-HHMMSS
+        LocalDateTime now = LocalDateTime.now();
+        return String.format("INV-%04d%02d%02d-%02d%02d%02d",
+                           now.getYear(), now.getMonthValue(), now.getDayOfMonth(),
+                           now.getHour(), now.getMinute(), now.getSecond());
     }
 
 } 

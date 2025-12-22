@@ -1,15 +1,26 @@
 package com.Uqar.product.entity;
 
+import java.util.HashSet;
+import java.util.Set;
+
 import com.Uqar.utils.entity.AuditedEntity;
-import jakarta.persistence.*;
+
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
-
-import java.util.Set;
-import java.util.HashSet;
 
 @Data
 @EqualsAndHashCode(callSuper=false)
@@ -37,6 +48,9 @@ public class MasterProduct extends AuditedEntity {
     @Column(nullable = false, unique = true , name = "barcode")
     private String barcode;
     private Boolean requiresPrescription;
+   
+    @Column(name = "number_of_parts_per_box")
+    private Integer numberOfPartsPerBox;
 
     @ManyToMany(cascade = {CascadeType.MERGE}, fetch = FetchType.LAZY)
     @JoinTable(

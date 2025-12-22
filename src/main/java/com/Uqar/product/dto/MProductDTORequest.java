@@ -1,16 +1,15 @@
 package com.Uqar.product.dto;
 
+import java.util.Set;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Min;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.Set;
-
-import io.swagger.v3.oas.annotations.media.Schema;
 
 @Data
 @AllArgsConstructor
@@ -74,6 +73,9 @@ public class MProductDTORequest {
 
     @Builder.Default
     private Boolean requiresPrescription = false;
+    
+    @Schema(description = "Number of parts per box (for partial selling). null or 0 or 1 = full box only, > 1 = can sell parts (e.g., 10 sachets per box)", example = "10")
+    private Integer numberOfPartsPerBox;
 
     private Long typeId;
     private Long formId;

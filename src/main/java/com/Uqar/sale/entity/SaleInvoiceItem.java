@@ -4,7 +4,11 @@ package com.Uqar.sale.entity;
 import com.Uqar.product.entity.StockItem;
 import com.Uqar.utils.entity.AuditedEntity;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -40,6 +44,10 @@ public class SaleInvoiceItem extends AuditedEntity{
     // تتبع الكمية المرتجعة من هذا العنصر
     @Column(nullable = false)
     private Integer refundedQuantity = 0;
+
+     // عدد الأجزاء المباعة (للبيع الجزئي)
+    @Column(name = "parts_sold")
+    private Integer partsSold;
 
     @Override
     protected String getSequenceName() {

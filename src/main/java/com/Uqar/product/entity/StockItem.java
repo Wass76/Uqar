@@ -7,7 +7,15 @@ import com.Uqar.product.Enum.ProductType;
 import com.Uqar.purchase.entity.PurchaseInvoice;
 import com.Uqar.user.entity.Pharmacy;
 import com.Uqar.utils.entity.AuditedEntity;
-import jakarta.persistence.*;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -67,6 +75,11 @@ public class StockItem extends AuditedEntity {
 
     @Column(length = 2000)
     private String notes; // ملاحظات إضافية 
+
+    
+     // عدد الأجزاء المتبقية من العلبة الحالية (للبيع الجزئي)
+    @Column(name = "remaining_parts")
+    private Integer remainingParts;
 
     @Override
     protected String getSequenceName() {

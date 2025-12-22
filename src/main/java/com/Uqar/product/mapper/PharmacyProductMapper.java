@@ -59,6 +59,7 @@ public class PharmacyProductMapper {
             product.setBarcodes(barcodes);
         }
         product.setRequiresPrescription(dto.getRequiresPrescription());
+        product.setNumberOfPartsPerBox(dto.getNumberOfPartsPerBox());
 
         if (pharmacyId != null) {
             product.setPharmacy(pharmacyRepository.findById(pharmacyId)
@@ -141,8 +142,7 @@ public class PharmacyProductMapper {
                 // .productType(ProductType.PHARMACY)
                 .productTypeName(ProductType.PHARMACY.getTranslatedName(sanitizedlang))
                 .requiresPrescription(product.getRequiresPrescription())
-               
-
+                .numberOfPartsPerBox(product.getNumberOfPartsPerBox())
                  
                 .pharmacyId(product.getPharmacy() != null ? product.getPharmacy().getId() : null)
                 .pharmacyName(product.getPharmacy() != null ? product.getPharmacy().getName() : null)

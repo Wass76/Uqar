@@ -1,19 +1,29 @@
 package com.Uqar.product.mapper;
 
+import java.util.HashSet;
+//import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Component;
+
 import com.Uqar.product.Enum.ProductType;
 import com.Uqar.product.dto.MProductDTORequest;
 import com.Uqar.product.dto.MProductDTOResponse;
 import com.Uqar.product.dto.PharmaceuticalProductRequest;
 import com.Uqar.product.dto.ProductMultiLangDTOResponse;
 //import com.Uqar.product.dto.MProductTranslationDTOResponse;
-import com.Uqar.product.entity.*;
-import com.Uqar.product.repo.*;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
+import com.Uqar.product.entity.Category;
+import com.Uqar.product.entity.FormTranslation;
+import com.Uqar.product.entity.ManufacturerTranslation;
+import com.Uqar.product.entity.MasterProduct;
+import com.Uqar.product.entity.MasterProductTranslation;
+import com.Uqar.product.entity.TypeTranslation;
+import com.Uqar.product.repo.CategoryRepo;
+import com.Uqar.product.repo.FormRepo;
+import com.Uqar.product.repo.ManufacturerRepo;
+import com.Uqar.product.repo.TypeRepo;
 
-import java.util.HashSet;
-//import java.util.Set;
-import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
@@ -38,6 +48,7 @@ public class MasterProductMapper {
         product.setTax(dto.getTax());
         product.setBarcode(dto.getBarcode());
         product.setRequiresPrescription(dto.getRequiresPrescription());
+        product.setNumberOfPartsPerBox(dto.getNumberOfPartsPerBox());
 
         if (dto.getCategoryIds() != null) {
             product.setCategories(new HashSet<>(categoryRepo.findAllById(dto.getCategoryIds())));
@@ -107,6 +118,7 @@ public class MasterProductMapper {
                 .barcode(product.getBarcode())
                 .productTypeName(ProductType.MASTER.getTranslatedName(lang))
                 .requiresPrescription(product.getRequiresPrescription())
+                .numberOfPartsPerBox(product.getNumberOfPartsPerBox())
                 .typeId(product.getType() != null ? product.getType().getId() : null)
                 .formId(product.getForm() != null ? product.getForm().getId() : null)
                 .manufacturerId(product.getManufacturer() != null ? product.getManufacturer().getId() : null)

@@ -17,13 +17,16 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.Uqar.product.Enum.ProductType;
+import com.Uqar.product.dto.InventoryAdjustmentRequest;
+import com.Uqar.product.dto.FullInventoryResetRequest;
+import com.Uqar.product.dto.PartialInventoryAdjustmentRequest;
+import com.Uqar.product.dto.InventoryCountSummaryResponse;
 import com.Uqar.product.dto.StockItemDTOResponse;
 import com.Uqar.product.dto.StockItemEditRequest;
 import com.Uqar.product.dto.StockProductOverallDTOResponse;
 import com.Uqar.product.service.CurrencyConversionService;
 import com.Uqar.product.service.StockService;
 import com.Uqar.user.Enum.Currency;
-import com.Uqar.product.dto.InventoryAdjustmentRequest;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -197,6 +200,50 @@ public class StockManagementController {
         
         StockItemDTOResponse result = stockService.addStockWithoutInvoice(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(result);
+    }
+
+    // ==================== Inventory Counting (الجرد) ====================
+    
+    @PostMapping("/inventory/full-reset")
+    @Operation(
+        summary = "Full Inventory Reset (الجرد الكامل)",
+        description = "Delete all stock items for the pharmacy and re-enter inventory from scratch. " +
+                      "Use Case: INV-FULL-01. " +
+                      "⚠️ WARNING: This will delete ALL stock items for the pharmacy. Use with caution."
+    )
+    @PreAuthorize("hasRole('PHARMACY_MANAGER') or hasRole('PHARMACY_EMPLOYEE')")
+    public ResponseEntity<List<StockItemDTOResponse>> performFullInventoryReset(
+            @Valid @RequestBody FullInventoryResetRequest request) {
+        
+        List<StockItemDTOResponse> result = stockService.performFullInventoryReset(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(result);
+    }
+
+    @PostMapping("/inventory/partial-adjustment")
+    @Operation(
+        summary = "Partial Inventory Adjustment (الجرد الجزئي)",
+        description = "Adjust inventory for a specific product only. " +
+                      "Use Case: INV-PART-02. " +
+                      "Deletes old StockItem(s) for the product and creates a new one with modified values."
+    )
+    @PreAuthorize("hasRole('PHARMACY_MANAGER') or hasRole('PHARMACY_EMPLOYEE')")
+    public ResponseEntity<StockItemDTOResponse> performPartialInventoryAdjustment(
+            @Valid @RequestBody PartialInventoryAdjustmentRequest request) {
+        
+        StockItemDTOResponse result = stockService.performPartialInventoryAdjustment(request);
+        return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/inventory/summary")
+    @Operation(
+        summary = "Get Inventory Count Summary (إحصائية الجرد)",
+        description = "Get statistics for inventory count: total number of unique products, total quantity, and total stock items (batches)."
+    )
+    @PreAuthorize("hasRole('PHARMACY_MANAGER') or hasRole('PHARMACY_EMPLOYEE')")
+    public ResponseEntity<InventoryCountSummaryResponse> getInventoryCountSummary() {
+        
+        InventoryCountSummaryResponse summary = stockService.getInventoryCountSummary();
+        return ResponseEntity.ok(summary);
     }
 
     

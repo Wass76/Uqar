@@ -2,13 +2,13 @@ package com.Uqar.sale.dto;
 
 //import com.Uqar.product.Enum.DiscountType;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.Max;
 
 @Data
 @AllArgsConstructor
@@ -30,12 +30,20 @@ public class SaleInvoiceItemDTORequest {
     @NotNull(message = "Quantity is required")
     @Min(value = 1, message = "Quantity must be at least 1")
     @Max(value = 10000, message = "Quantity cannot exceed 10000")
-    @Schema(description = "Quantity", example = "2")
+    @Schema(description = "Quantity (boxes if product supports partial selling, otherwise units)", example = "2")
     private Integer quantity;
     
     @Min(value = 0, message = "Unit price must be non-negative")
-    @Schema(description = "Unit Price (optional - will use stock price if not provided)", example = "800.0")
-    private Float unitPrice; 
+    @Schema(description = "Unit Price (optional - will use stock price if not provided). This is the price per box for full box sales.", example = "800.0")
+    private Float unitPrice;
+    
+    @Min(value = 0, message = "Part price must be non-negative")
+    @Schema(description = "Part Price (optional - for partial selling only). Price per part. Total price = partPrice * partsToSell. If not provided, will be calculated from unitPrice with 20% profit margin.", example = "100.0")
+    private Float partPrice;
+    
+    @Min(value = 1, message = "Parts to sell must be at least 1 if provided")
+    @Schema(description = "Number of parts to sell (optional - for partial selling). Only used if product has numberOfPartsPerBox > 1.", example = "3")
+    private Integer partsToSell; 
     
     // @Schema(description = "Discount Type", example = "FIXED_AMOUNT", allowableValues = {"PERCENTAGE", "FIXED_AMOUNT"})
     // private DiscountType discountType;

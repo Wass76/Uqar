@@ -48,7 +48,6 @@ import com.Uqar.user.config.RoleConstants;
 import com.Uqar.user.entity.Customer;
 import com.Uqar.user.entity.CustomerDebt;
 import com.Uqar.user.entity.Employee;
-import com.Uqar.utils.annotation.Audited;
 import com.Uqar.user.entity.Pharmacy;
 import com.Uqar.user.mapper.CustomerDebtMapper;
 import com.Uqar.user.repository.CustomerDebtRepository;
@@ -56,6 +55,7 @@ import com.Uqar.user.repository.CustomerRepo;
 import com.Uqar.user.repository.EmployeeRepository;
 import com.Uqar.user.repository.UserRepository;
 import com.Uqar.user.service.BaseSecurityService;
+import com.Uqar.utils.annotation.Audited;
 import com.Uqar.utils.exception.ConflictException;
 import com.Uqar.utils.exception.RequestNotValidException;
 import com.Uqar.utils.exception.UnAuthorizedException;
@@ -213,15 +213,55 @@ public class SaleService extends BaseSecurityService {
         
         float total = 0;
         
-        for (SaleInvoiceItem item : items) {
+        for (int i = 0; i < items.size(); i++) {
+            SaleInvoiceItem item = items.get(i);
+            SaleInvoiceItemDTORequest requestItem = requestDTO.getItems().get(i);
             StockItem product = item.getStockItem();
             
-            if (!stockService.isQuantityAvailable(product.getProductId(), item.getQuantity(), product.getProductType())) {
-                String productName = stockItemMapper.getProductName(product.getProductId(), product.getProductType());
-                throw new RequestNotValidException("Insufficient stock for product: " + productName + 
-                    " (ID: " + product.getProductId() + "). Available: " + 
-                    stockItemRepo.getTotalQuantity(product.getProductId(), getCurrentUserPharmacyId(), product.getProductType()) + 
-                    ", Requested: " + item.getQuantity());
+            // التحقق من صحة partsToSell إذا كان بيع جزئي
+            Integer numberOfPartsPerBox = stockItemMapper.getNumberOfPartsPerBox(
+                product.getProductId(), 
+                product.getProductType()
+            );
+            boolean isPartialSale = requestItem.getPartsToSell() != null && 
+                                   numberOfPartsPerBox != null && 
+                                   numberOfPartsPerBox > 1;
+            
+            if (isPartialSale) {
+                // التحقق من أن partsToSell لا يتجاوز عدد الأجزاء في العلبة
+                if (requestItem.getPartsToSell() > numberOfPartsPerBox) {
+                    throw new RequestNotValidException(
+                        "Parts to sell (" + requestItem.getPartsToSell() + 
+                        ") cannot exceed number of parts per box (" + numberOfPartsPerBox + ")");
+                }
+                
+                // التحقق من توفر الأجزاء المطلوبة
+                Integer currentRemainingParts = product.getRemainingParts();
+                if (currentRemainingParts == null) {
+                    // إذا لم يكن هناك remainingParts، يعني أن العلبة لم تُفتح بعد
+                    // نستخدم numberOfPartsPerBox كقيمة افتراضية
+                    currentRemainingParts = numberOfPartsPerBox;
+                }
+                
+                // حساب عدد الأجزاء المتاحة (الأجزاء المتبقية من العلبة الحالية + أجزاء العلبات الأخرى)
+                Integer availableParts = currentRemainingParts + 
+                    (product.getQuantity() - 1) * numberOfPartsPerBox;
+                
+                if (requestItem.getPartsToSell() > availableParts) {
+                    String productName = stockItemMapper.getProductName(product.getProductId(), product.getProductType());
+                    throw new RequestNotValidException("Insufficient parts for product: " + productName + 
+                        " (ID: " + product.getProductId() + "). Available parts: " + availableParts + 
+                        ", Requested: " + requestItem.getPartsToSell());
+                }
+            } else {
+                // بيع علبة كاملة: التحقق من توفر عدد كافٍ من العلبات
+                if (!stockService.isQuantityAvailable(product.getProductId(), item.getQuantity(), product.getProductType())) {
+                    String productName = stockItemMapper.getProductName(product.getProductId(), product.getProductType());
+                    throw new RequestNotValidException("Insufficient stock for product: " + productName + 
+                        " (ID: " + product.getProductId() + "). Available: " + 
+                        stockItemRepo.getTotalQuantity(product.getProductId(), getCurrentUserPharmacyId(), product.getProductType()) + 
+                        ", Requested: " + item.getQuantity());
+                }
             }
             
             if (product.getExpiryDate() != null && product.getExpiryDate().isBefore(java.time.LocalDate.now())) {
@@ -230,14 +270,65 @@ public class SaleService extends BaseSecurityService {
                     " (ID: " + product.getProductId() + "). Expiry date: " + product.getExpiryDate());
             }
             
-            product.setQuantity(product.getQuantity() - item.getQuantity());
+            // خصم المخزون
+            int boxesDeducted = 0;
+            if (isPartialSale) {
+                // بيع جزئي: التعامل مع remainingParts
+                Integer partsToSell = requestItem.getPartsToSell();
+                Integer currentRemainingParts = product.getRemainingParts();
+                
+                // إذا لم يكن هناك remainingParts، نبدأ من numberOfPartsPerBox
+                if (currentRemainingParts == null) {
+                    currentRemainingParts = numberOfPartsPerBox;
+                }
+                
+                // خصم الأجزاء المطلوبة
+                int newRemainingParts = currentRemainingParts - partsToSell;
+                
+                if (newRemainingParts <= 0) {
+                    // استنفدت العلبة الحالية: خصم علبة واحدة
+                    boxesDeducted = 1;
+                    product.setQuantity(product.getQuantity() - 1);
+                    
+                    // إذا كانت هناك علبات أخرى، نبدأ علبة جديدة
+                    if (product.getQuantity() > 0) {
+                        product.setRemainingParts(numberOfPartsPerBox + newRemainingParts);
+                    } else {
+                        product.setRemainingParts(null);
+                    }
+                } else {
+                    // لا تزال هناك أجزاء متبقية: تحديث remainingParts فقط
+                    product.setRemainingParts(newRemainingParts);
+                }
+                
+                // تحديث quantity في SaleInvoiceItem ليعكس عدد العلبات المخصومة
+                item.setQuantity(boxesDeducted);
+            } else {
+                // بيع علبة كاملة: خصم مباشر
+                boxesDeducted = item.getQuantity();
+                product.setQuantity(product.getQuantity() - boxesDeducted);
+                
+                // إذا كان المنتج قابل للبيع الجزئي: تعيين remainingParts للعلبة الجديدة
+                if (numberOfPartsPerBox != null && numberOfPartsPerBox > 1 && product.getQuantity() > 0) {
+                    product.setRemainingParts(numberOfPartsPerBox);
+                } else if (product.getQuantity() == 0) {
+                    product.setRemainingParts(null);
+                }
+            }
+            
             stockItemRepo.save(product);
             
             item.setSaleInvoice(invoice);
             
-            float subTotal = item.getUnitPrice() * item.getQuantity();
-            item.setSubTotal(subTotal);
-            total += subTotal;
+            // حساب subtotal
+            if (isPartialSale) {
+                // بيع جزئي: subtotal = unitPrice مباشرة (لأن unitPrice بالفعل هو السعر الكلي للأجزاء)
+                item.setSubTotal(item.getUnitPrice());
+            } else {
+                // بيع عادي: subtotal = unitPrice * quantity
+                item.setSubTotal(item.getUnitPrice() * item.getQuantity());
+            }
+            total += item.getSubTotal();
         }
         
         float invoiceDiscount = discountCalculationService.calculateDiscount(
