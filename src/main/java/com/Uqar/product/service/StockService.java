@@ -681,8 +681,7 @@ public class StockService extends BaseSecurityService {
             // معالجة العناصر المرتبطة بالمبيعات: وضع الكمية على 0 (لا يمكن حذفها)
             for (StockItem referencedItem : referencedStockItems) {
                 referencedItem.setQuantity(0);
-                referencedItem.setNotes((referencedItem.getNotes() != null ? referencedItem.getNotes() + " | " : "") + 
-                    "Full inventory reset - quantity set to 0 (referenced in sales) - " + LocalDateTime.now());
+                referencedItem.setNotes("Full inventory reset - quantity set to 0 (referenced in sales) - " + LocalDateTime.now());
                 stockItemRepo.save(referencedItem);
             }
             
@@ -749,8 +748,8 @@ public class StockService extends BaseSecurityService {
             // حفظ StockItem
             StockItem savedStockItem = stockItemRepo.save(stockItem);
             
-            // إضافة للاستجابة
-            StockItemDTOResponse response = stockItemMapper.toResponse(savedStockItem);
+            // إضافة للاستجابة مع تحويل العملة (USD للعرض المزدوج)
+            StockItemDTOResponse response = stockItemMapper.toResponse(savedStockItem, Currency.USD);
             response.setPharmacyId(pharmacyId);
             createdItems.add(response);
         }
@@ -849,8 +848,7 @@ public class StockService extends BaseSecurityService {
         // لا يمكن حذفها لأنها مرتبطة بفواتير مبيعات
         for (StockItem referencedItem : referencedStockItems) {
             referencedItem.setQuantity(0);
-            referencedItem.setNotes((referencedItem.getNotes() != null ? referencedItem.getNotes() + " | " : "") + 
-                "Inventory adjusted - quantity set to 0 (referenced in sales) - " + LocalDateTime.now());
+            referencedItem.setNotes("Inventory adjusted - quantity set to 0 (referenced in sales) - " + LocalDateTime.now());
             stockItemRepo.save(referencedItem);
         }
         
@@ -873,8 +871,8 @@ public class StockService extends BaseSecurityService {
         // حفظ StockItem الجديد
         StockItem savedStockItem = stockItemRepo.save(newStockItem);
         
-        // إرجاع الاستجابة
-        StockItemDTOResponse response = stockItemMapper.toResponse(savedStockItem);
+        // إرجاع الاستجابة مع تحويل العملة (USD للعرض المزدوج)
+        StockItemDTOResponse response = stockItemMapper.toResponse(savedStockItem, Currency.USD);
         response.setPharmacyId(pharmacyId);
         
         logger.info("Partial inventory adjustment completed for product {} (type: {}). New quantity: {}", 

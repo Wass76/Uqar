@@ -600,6 +600,7 @@ public class StockItemMapper {
             .pharmacyId(pharmacyId)
             .numberOfPartsPerBox(getNumberOfPartsPerBox(productId, productType))
             .remainingParts(stockItems.stream()
+                .filter(item -> item.getQuantity() != null && item.getQuantity() > 0) // فقط العناصر بكمية > 0
                 .mapToInt(item -> item.getRemainingParts() != null ? item.getRemainingParts() : 0)
                 .sum());
         
