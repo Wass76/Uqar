@@ -24,6 +24,7 @@ import lombok.NoArgsConstructor;
   "tax": 5.0,
   "barcodes": ["1234567890123"],
   "requiresPrescription": false,
+  "numberOfPartsPerBox": 10,
   "typeId": 1,
   "formId": 1,
   "manufacturerId": 1,

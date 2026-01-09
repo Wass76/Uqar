@@ -17,10 +17,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.Uqar.product.Enum.ProductType;
-import com.Uqar.product.dto.InventoryAdjustmentRequest;
 import com.Uqar.product.dto.FullInventoryResetRequest;
-import com.Uqar.product.dto.PartialInventoryAdjustmentRequest;
+import com.Uqar.product.dto.InventoryAdjustmentRequest;
 import com.Uqar.product.dto.InventoryCountSummaryResponse;
+import com.Uqar.product.dto.PartialInventoryAdjustmentRequest;
 import com.Uqar.product.dto.StockItemDTOResponse;
 import com.Uqar.product.dto.StockItemEditRequest;
 import com.Uqar.product.dto.StockProductOverallDTOResponse;
@@ -222,9 +222,9 @@ public class StockManagementController {
     @PostMapping("/inventory/partial-adjustment")
     @Operation(
         summary = "Partial Inventory Adjustment (الجرد الجزئي)",
-        description = "Adjust inventory for a specific product only. " +
+        description = "Adjust a specific stock item (batch) by updating its quantity, expiry date, and purchase price. " +
                       "Use Case: INV-PART-02. " +
-                      "Deletes old StockItem(s) for the product and creates a new one with modified values."
+                      "Updates the stock item directly without deleting or creating new items."
     )
     @PreAuthorize("hasRole('PHARMACY_MANAGER') or hasRole('PHARMACY_EMPLOYEE')")
     public ResponseEntity<StockItemDTOResponse> performPartialInventoryAdjustment(

@@ -35,6 +35,8 @@ import java.time.LocalDate;
       "stockItemId": 1,
       "quantity": 2,
       "unitPrice": 800.0
+      "partsToSell": 3
+      "partPrice": 100.0,
     }
   ]
 }
