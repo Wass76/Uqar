@@ -17,17 +17,18 @@ spring:
     name: uqar
     hikari:
       # Connection pool settings for Docker/network resilience
-      minimum-idle: 5
-      maximum-pool-size: 20
+      minimum-idle: 2
+      maximum-pool-size: 10
       connection-timeout: 30000 # 30 seconds
-      idle-timeout: 600000 # 10 minutes
-      max-lifetime: 1800000 # 30 minutes
+      idle-timeout: 300000 # 5 minutes
+      # Retire connections before server/network closes them (avoids "connection has been closed" and pool exhaustion)
+      max-lifetime: 300000 # 5 minutes - shorter than typical idle timeouts so Hikari recycles first
       leak-detection-threshold: 60000 # 1 minute
-      # Connection validation
+      # Connection validation (Hikari validates before use when maxLifetime is set)
       connection-test-query: SELECT 1
       validation-timeout: 5000 # 5 seconds
       # Keep connections alive
-      keepalive-time: 300000 # 5 minutes - send keepalive to prevent connection reset
+      keepalive-time: 120000 # 2 minutes - more frequent keepalive to reduce mid-idle drops
       # Network resilience
       register-mbeans: true
   flyway:
