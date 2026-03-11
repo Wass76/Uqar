@@ -2,7 +2,6 @@ package com.Uqar.product.dto;
 
 import java.time.LocalDate;
 
-import com.Uqar.product.Enum.ProductType;
 import com.Uqar.user.Enum.Currency;
 import com.fasterxml.jackson.annotation.JsonFormat;
 
@@ -21,8 +20,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Schema(description = "Partial Inventory Adjustment Request", example = """
 {
-    "productId": 1,
-    "productType": "PHARMACY",
+    "stockItemId": 253,
     "newQuantity": 150,
     "newExpiryDate": "2025-12-31",
     "actualPurchasePrice": 100.0,
@@ -31,13 +29,9 @@ import lombok.NoArgsConstructor;
 """)
 public class PartialInventoryAdjustmentRequest {
     
-    @NotNull(message = "Product ID is required")
-    @Schema(description = "Product ID to adjust", example = "1")
-    private Long productId;
-    
-    @NotNull(message = "Product type is required")
-    @Schema(description = "Product type (MASTER or PHARMACY)", example = "PHARMACY")
-    private ProductType productType;
+    @NotNull(message = "Stock Item ID is required")
+    @Schema(description = "Stock Item ID to adjust", example = "253")
+    private Long stockItemId;
     
     @NotNull(message = "New quantity is required")
     @Min(value = 1, message = "New quantity must be greater than 0")
@@ -58,4 +52,3 @@ public class PartialInventoryAdjustmentRequest {
     @Schema(description = "Minimum stock level (optional)", example = "10")
     private Integer minStockLevel;
 }
-

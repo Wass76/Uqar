@@ -15,7 +15,6 @@ import org.springframework.stereotype.Component;
 import com.Uqar.product.Enum.InventoryAdjustmentReason;
 import com.Uqar.product.Enum.ProductType;
 import com.Uqar.product.dto.FullInventoryResetRequest;
-import com.Uqar.product.dto.PartialInventoryAdjustmentRequest;
 import com.Uqar.product.dto.StockItemDTOResponse;
 import com.Uqar.product.dto.StockItemDetailDTOResponse;
 import com.Uqar.product.dto.StockItemWithProductInfoDTOResponse;
@@ -762,33 +761,41 @@ public class StockItemMapper {
      * تحويل PartialInventoryAdjustmentRequest إلى StockItem للجرد الجزئي
      * Convert PartialInventoryAdjustmentRequest to StockItem for partial inventory adjustment
      * 
-     * @param request DTO من الجرد الجزئي
+     * @param productId معرف المنتج (من StockItem الموجود)
+     * @param productType نوع المنتج (من StockItem الموجود)
      * @param pharmacy الصيدلية
+     * @param newQuantity الكمية الجديدة
+     * @param newExpiryDate تاريخ الصلاحية الجديد
      * @param actualPurchasePriceInSYP سعر الشراء بالليرة السورية
      * @param batchPrefix بادئة Batch Number
      * @param reason سبب الجرد
      * @param notes ملاحظات
+     * @param minStockLevel الحد الأدنى للمخزون
      * @return StockItem جديد
      */
     public StockItem toStockItemFromPartialInventoryRequest(
-            PartialInventoryAdjustmentRequest request,
+            Long productId,
+            ProductType productType,
             Pharmacy pharmacy,
+            Integer newQuantity,
+            LocalDate newExpiryDate,
             Double actualPurchasePriceInSYP,
             String batchPrefix,
             InventoryAdjustmentReason reason,
-            String notes) {
+            String notes,
+            Integer minStockLevel) {
         
         return createStockItemForInventoryCount(
-            request.getProductId(),
-            request.getProductType(),
+            productId,
+            productType,
             pharmacy,
-            request.getNewQuantity(),
-            request.getNewExpiryDate(),
+            newQuantity,
+            newExpiryDate,
             actualPurchasePriceInSYP,
             batchPrefix,
             reason,
             notes,
-            request.getMinStockLevel()
+            minStockLevel
         );
     }
-} 
+}

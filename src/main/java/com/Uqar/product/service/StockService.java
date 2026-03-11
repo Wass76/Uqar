@@ -761,14 +761,16 @@ public class StockService extends BaseSecurityService {
     }
 
     /**
-     * الجرد الجزئي - تعديل مخزون دواء محدد فقط
-     * Partial Inventory Adjustment - Adjust inventory for a specific product only
+     * الجرد الجزئي - تعديل مخزون StockItem محدد
+     * Partial Inventory Adjustment - Adjust a specific stock item
      * 
      * Use Case: INV-PART-02
      * Process:
-     * 1. Search for existing StockItem(s) for the product
-     * 2. Delete old StockItem(s)
-     * 3. Create new StockItem with modified values
+     * 1. Find the specific StockItem by ID
+     * 2. Verify it belongs to the current pharmacy
+     * 3. Check if it's referenced in sales (cannot be deleted)
+     * 4. Delete old StockItem (if not referenced) or set quantity to 0 (if referenced)
+     * 5. Create new StockItem with modified values
      */
     @Transactional
     public StockItemDTOResponse performPartialInventoryAdjustment(
@@ -788,84 +790,74 @@ public class StockService extends BaseSecurityService {
         Pharmacy pharmacy = employee.getPharmacy();
         Long pharmacyId = pharmacy.getId();
         
-        // 2. البحث عن StockItem(s) الحالية للدواء
-        List<StockItem> existingStockItems = stockItemRepo.findByProductIdAndProductTypeAndPharmacyId(
-            request.getProductId(), request.getProductType(), pharmacyId);
+        // 2. البحث عن StockItem المحدد
+        StockItem existingStockItem = stockItemRepo.findById(request.getStockItemId())
+            .orElseThrow(() -> new ResourceNotFoundException(
+                String.format("Stock item with ID %d not found", request.getStockItemId())));
         
-        if (existingStockItems.isEmpty()) {
-            throw new ResourceNotFoundException(
-                String.format("No stock items found for product ID %d (type: %s) in pharmacy %d", 
-                             request.getProductId(), request.getProductType(), pharmacyId));
+        // 3. التحقق من أن StockItem ينتمي للصيدلية الحالية
+        if (!existingStockItem.getPharmacy().getId().equals(pharmacyId)) {
+            throw new UnAuthorizedException(
+                String.format("Stock item %d does not belong to your pharmacy", request.getStockItemId()));
         }
         
-        // 3. الحصول على المنتج للتحقق من وجوده والحصول على السعر
-        Object product = getProductForAdjustment(request.getProductId(), request.getProductType(), pharmacyId);
+        // 4. الحصول على productId و productType من StockItem الموجود
+        Long productId = existingStockItem.getProductId();
+        ProductType productType = existingStockItem.getProductType();
         
-        // 4. تحديد العملة (افتراضي: SYP)
+        // 5. الحصول على المنتج للتحقق من وجوده والحصول على السعر
+        Object product = getProductForAdjustment(productId, productType, pharmacyId);
+        
+        // 6. تحديد العملة (افتراضي: SYP)
         Currency requestCurrency = request.getCurrency() != null ? request.getCurrency() : Currency.SYP;
         
-        // 5. تحديد سعر الشراء (إذا تم إرسال actualPurchasePrice استخدمه، وإلا استخدم refPurchasePrice من المنتج)
+        // 7. تحديد سعر الشراء (إذا تم إرسال actualPurchasePrice استخدمه، وإلا استخدم refPurchasePrice من المنتج)
         Double actualPurchasePrice = determinePurchasePriceForInventoryCount(
-            request.getProductId(), request.getProductType(), product, request.getActualPurchasePrice());
+            productId, productType, product, request.getActualPurchasePrice());
         
-        // 6. تحويل سعر الشراء من العملة المحددة إلى SYP قبل الحفظ
+        // 8. تحويل سعر الشراء من العملة المحددة إلى SYP قبل الحفظ
         Double actualPurchasePriceInSYP = convertPriceToSYP(actualPurchasePrice, requestCurrency);
         
         if (requestCurrency != Currency.SYP && request.getActualPurchasePrice() != null) {
-            logger.info("Converted purchase price from {} {} to {} SYP for product {} during partial inventory adjustment", 
-                       actualPurchasePrice, requestCurrency, actualPurchasePriceInSYP, request.getProductId());
+            logger.info("Converted purchase price from {} {} to {} SYP for stock item {} during partial inventory adjustment", 
+                       actualPurchasePrice, requestCurrency, actualPurchasePriceInSYP, request.getStockItemId());
         }
         
-        // 7. التحقق من تاريخ الصلاحية الجديد (إذا تم إرساله)
+        // 9. التحقق من تاريخ الصلاحية الجديد (إذا تم إرساله)
         if (request.getNewExpiryDate() != null) {
             validateExpiryDate(request.getNewExpiryDate());
         }
         
-        // 8. التحقق من العناصر المرتبطة بالمبيعات (لا يمكن حذفها)
-        List<Long> stockItemIds = existingStockItems.stream()
-            .map(StockItem::getId)
-            .collect(Collectors.toList());
+        // 10. التحقق من أن StockItem مرتبط بالمبيعات (لا يمكن حذفها)
+        boolean isReferenced = saleInvoiceItemRepository.existsByStockItemId(request.getStockItemId());
         
-        List<Long> referencedStockItemIds = saleInvoiceItemRepository.findStockItemIdsReferencedInSales(stockItemIds);
-        
-        // فصل العناصر إلى: مرتبطة بالمبيعات وغير مرتبطة
-        List<StockItem> referencedStockItems = existingStockItems.stream()
-            .filter(item -> referencedStockItemIds.contains(item.getId()))
-            .collect(Collectors.toList());
-        
-        List<StockItem> nonReferencedStockItems = existingStockItems.stream()
-            .filter(item -> !referencedStockItemIds.contains(item.getId()))
-            .collect(Collectors.toList());
-        
-        // 9. معالجة العناصر غير المرتبطة: حذفها
-        if (!nonReferencedStockItems.isEmpty()) {
-            stockItemRepo.deleteAll(nonReferencedStockItems);
-            logger.info("Deleted {} non-referenced stock items for product {} (type: {}) during partial inventory adjustment", 
-                       nonReferencedStockItems.size(), request.getProductId(), request.getProductType());
+        // 11. معالجة StockItem القديم
+        if (isReferenced) {
+            // إذا كان مرتبط بالمبيعات: وضع الكمية على 0 (لا يمكن حذفه)
+            existingStockItem.setQuantity(0);
+            existingStockItem.setNotes("Inventory adjusted - quantity set to 0 (referenced in sales) - " + LocalDateTime.now());
+            stockItemRepo.save(existingStockItem);
+            logger.info("Updated referenced stock item {} (set quantity to 0) during partial inventory adjustment", 
+                       request.getStockItemId());
+        } else {
+            // إذا لم يكن مرتبط: حذفه
+            stockItemRepo.delete(existingStockItem);
+            logger.info("Deleted stock item {} during partial inventory adjustment", request.getStockItemId());
         }
         
-        // 10. معالجة العناصر المرتبطة بالمبيعات: تحديثها (وضع الكمية على 0)
-        // لا يمكن حذفها لأنها مرتبطة بفواتير مبيعات
-        for (StockItem referencedItem : referencedStockItems) {
-            referencedItem.setQuantity(0);
-            referencedItem.setNotes("Inventory adjusted - quantity set to 0 (referenced in sales) - " + LocalDateTime.now());
-            stockItemRepo.save(referencedItem);
-        }
-        
-        if (!referencedStockItems.isEmpty()) {
-            logger.info("Updated {} referenced stock items (set quantity to 0) for product {} (type: {}) during partial inventory adjustment", 
-                       referencedStockItems.size(), request.getProductId(), request.getProductType());
-        }
-        
-        // 11. إنشاء StockItem جديد بالقيم المعدلة باستخدام Mapper
+        // 12. إنشاء StockItem جديد بالقيم المعدلة
         String batchPrefix = generateBatchNumberPrefix();
         StockItem newStockItem = stockItemMapper.toStockItemFromPartialInventoryRequest(
-            request,
+            productId,
+            productType,
             pharmacy,
+            request.getNewQuantity(),
+            request.getNewExpiryDate(),
             actualPurchasePriceInSYP,
             batchPrefix,
             InventoryAdjustmentReason.INVENTORY_COUNT,
-            "Partial inventory adjustment - " + LocalDateTime.now()
+            "Partial inventory adjustment - " + LocalDateTime.now(),
+            request.getMinStockLevel()
         );
         
         // حفظ StockItem الجديد
@@ -875,8 +867,8 @@ public class StockService extends BaseSecurityService {
         StockItemDTOResponse response = stockItemMapper.toResponse(savedStockItem, Currency.USD);
         response.setPharmacyId(pharmacyId);
         
-        logger.info("Partial inventory adjustment completed for product {} (type: {}). New quantity: {}", 
-                   request.getProductId(), request.getProductType(), request.getNewQuantity());
+        logger.info("Partial inventory adjustment completed for stock item {}. Created new stock item with ID {}. New quantity: {}", 
+                   request.getStockItemId(), savedStockItem.getId(), request.getNewQuantity());
         
         return response;
     }
@@ -963,5 +955,4 @@ public class StockService extends BaseSecurityService {
                            now.getYear(), now.getMonthValue(), now.getDayOfMonth(),
                            now.getHour(), now.getMinute(), now.getSecond());
     }
-
-} 
+}

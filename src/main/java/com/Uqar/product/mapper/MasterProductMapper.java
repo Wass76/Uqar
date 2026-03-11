@@ -208,6 +208,10 @@ public class MasterProductMapper {
             product.setRequiresPrescription(dto.getRequiresPrescription());
         }
 
+        if (dto.getNumberOfPartsPerBox() != null) {
+            product.setNumberOfPartsPerBox(dto.getNumberOfPartsPerBox());
+        }
+
         if (dto.getCategoryIds() != null) {
             product.setCategories(new HashSet<>(categoryRepo.findAllById(dto.getCategoryIds())));
         }

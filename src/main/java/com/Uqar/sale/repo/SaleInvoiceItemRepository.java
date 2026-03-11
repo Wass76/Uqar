@@ -20,4 +20,4 @@ public interface SaleInvoiceItemRepository extends JpaRepository<SaleInvoiceItem
     
     // التحقق من وجود عنصر مبيعات مرتبط بـ StockItem محدد
     boolean existsByStockItemId(Long stockItemId);
-} 
+}

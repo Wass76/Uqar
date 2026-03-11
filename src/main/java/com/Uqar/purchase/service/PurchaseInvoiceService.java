@@ -566,6 +566,9 @@ public class PurchaseInvoiceService extends BaseSecurityService {
             if (requestItem != null && requestItem.getMinStockLevel() != null) {
                 stockItem.setMinStockLevel(requestItem.getMinStockLevel());
             }
+            if (requestItem != null && requestItem.getPartPrice() != null) {
+                stockItem.setPartPrice(requestItem.getPartPrice());
+            }
             
             // Set batch and invoice details
             stockItem.setBatchNo(item.getBatchNo());
