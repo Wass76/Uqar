@@ -52,4 +52,3 @@ public class PartialInventoryAdjustmentRequest {
     @Schema(description = "Minimum stock level (optional)", example = "10")
     private Integer minStockLevel;
 }
-

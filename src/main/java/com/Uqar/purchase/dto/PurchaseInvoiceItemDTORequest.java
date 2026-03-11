@@ -47,6 +47,9 @@ public class PurchaseInvoiceItemDTORequest {
     
     @Schema(description = "Selling price per unit (required for PHARMACY type products, optional for MASTER products)", example = "8.50")
     private Double sellingPrice;
+
+    @Schema(description = "Part price (optional). Price per part for partial selling. If set, used when selling by parts; otherwise 20% margin is applied.", example = "150")
+    private Integer partPrice;
     
     @Schema(description = "Minimum stock level threshold for re-purchase notification", example = "10")
     private Integer minStockLevel;

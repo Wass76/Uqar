@@ -100,6 +100,7 @@ public class PurchaseInvoiceMapper {
         item.setInvoicePrice(dto.getInvoicePrice());
         item.setBatchNo(dto.getBatchNo());
         item.setExpiryDate(dto.getExpiryDate());
+        item.setPartPrice(dto.getPartPrice());
         return item;
     }
 
@@ -121,6 +122,7 @@ public class PurchaseInvoiceMapper {
         dto.setActualPrice(actualPriceInRequestedCurrency);
         dto.setBatchNo(item.getBatchNo());
         dto.setExpiryDate(item.getExpiryDate());
+        dto.setPartPrice(item.getPartPrice());
         
         // Set refSellingPrice and minStockLevel based on product type
         if (item.getProductType() == ProductType.PHARMACY && pharmacyProduct != null) {

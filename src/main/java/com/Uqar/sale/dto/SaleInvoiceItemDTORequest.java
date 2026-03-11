@@ -39,12 +39,8 @@ public class SaleInvoiceItemDTORequest {
     @Schema(description = "Unit Price (optional - will use stock price if not provided). This is the price per box for full box sales.", example = "800.0")
     private Float unitPrice;
     
-    @Min(value = 0, message = "Part price must be non-negative")
-    @Schema(description = "Part Price (optional - for partial selling only). Price per part. Total price = partPrice * partsToSell. If not provided, will be calculated from unitPrice with 20% profit margin.", example = "100.0")
-    private Float partPrice;
-    
     @Min(value = 1, message = "Parts to sell must be at least 1 if provided")
-    @Schema(description = "Number of parts to sell (optional - for partial selling). Only used if product has numberOfPartsPerBox > 1.", example = "3")
+    @Schema(description = "Number of parts to sell (optional - for partial selling). Price per part is taken only from purchase invoice (stock); if not set there, 20% margin on box price is used.", example = "3")
     private Integer partsToSell; 
     
     // @Schema(description = "Discount Type", example = "FIXED_AMOUNT", allowableValues = {"PERCENTAGE", "FIXED_AMOUNT"})

@@ -81,6 +81,10 @@ public class StockItem extends AuditedEntity {
     @Column(name = "remaining_parts")
     private Integer remainingParts;
 
+    @Column(name = "part_price")
+    private Integer partPrice;
+
+
     @Override
     protected String getSequenceName() {
         return "stock_item_id_seq";

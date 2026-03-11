@@ -82,13 +82,12 @@ public class SaleMapper {
             // عدد العلبات المخصومة سيتم حسابه بناءً على remainingParts
             finalQuantity = 0;
             
-            // حساب السعر: إذا تم إرسال partPrice يدوياً، استخدمه كسعر الجزء الواحد واضربه بعدد الأجزاء
-            // وإلا احسبه من unitPrice (سعر العلبة) مع 20% ربح
-            if (dto.getPartPrice() != null && dto.getPartPrice() > 0) {
-                // الصيدلاني حدد partPrice يدوياً كسعر الجزء الواحد: اضربه بعدد الأجزاء
-                finalUnitPrice = dto.getPartPrice() * dto.getPartsToSell();
+            // السعر يحدد من الشراء فقط: إما partPrice من فاتورة الشراء (المخزون) أو 20% ربح
+            if (stockItem.getPartPrice() != null && stockItem.getPartPrice() > 0) {
+                // سعر الجزء من فاتورة الشراء × عدد الأجزاء
+                finalUnitPrice = stockItem.getPartPrice().floatValue() * dto.getPartsToSell();
             } else {
-                // حساب تلقائي: نحتاج سعر العلبة أولاً
+                // سعر الجزء غير محدد في الشراء: استخدم سعر العلبة مع 20% ربح
                 Float baseBoxPrice;
                 
                 // استخدام unitPrice إذا تم إرساله، وإلا سعر البيع من المخزون

@@ -245,6 +245,6 @@ public class StockManagementController {
         InventoryCountSummaryResponse summary = stockService.getInventoryCountSummary();
         return ResponseEntity.ok(summary);
     }
+}
 
     
-} 

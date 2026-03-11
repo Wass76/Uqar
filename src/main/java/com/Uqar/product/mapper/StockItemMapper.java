@@ -798,4 +798,4 @@ public class StockItemMapper {
             minStockLevel
         );
     }
-} 
+}

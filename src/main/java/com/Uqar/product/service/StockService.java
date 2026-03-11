@@ -955,5 +955,4 @@ public class StockService extends BaseSecurityService {
                            now.getYear(), now.getMonthValue(), now.getDayOfMonth(),
                            now.getHour(), now.getMinute(), now.getSecond());
     }
-
-} 
+}

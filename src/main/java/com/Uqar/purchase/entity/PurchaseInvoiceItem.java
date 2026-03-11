@@ -49,6 +49,9 @@ public class PurchaseInvoiceItem extends AuditedEntity {
     @Column(nullable = true)
     private LocalDate expiryDate;
 
+    @Column(name = "part_price")
+    private Integer partPrice;
+
     @EqualsAndHashCode.Include
     protected Long getIdForEquals() {
         return super.getId();
